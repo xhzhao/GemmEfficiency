@@ -1,0 +1,22 @@
+Set Enironment for Xeon Phi
+main start 
+----------GEMM 1----------
+sgemm_profile end, avg time = 6.74, GFLOPS = 345.45
+----------GEMM 2----------
+sgemm_profile end, avg time = 0.24, GFLOPS = 541.67
+----------GEMM 3----------
+sgemm_profile end, avg time = 1.24, GFLOPS = 1852.47
+----------GEMM 4----------
+sgemm_profile end, avg time = 0.24, GFLOPS = 533.60
+----------GEMM 5----------
+sgemm_profile end, avg time = 0.12, GFLOPS = 1068.80
+----------GEMM 6----------
+sgemm_profile end, avg time = 1.34, GFLOPS = 1710.85
+----------GEMM 7----------
+sgemm_profile end, avg time = 0.54, GFLOPS = 481.48
+----------GEMM 8----------
+sgemm_profile end, avg time = 0.20, GFLOPS = 1281.28
+----------GEMM 9----------
+sgemm_profile end, avg time = 0.46, GFLOPS = 556.80
+----------GEMM 10----------
+sgemm_profile end, avg time = 0.12, GFLOPS = 541.67

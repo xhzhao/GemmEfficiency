@@ -1,0 +1,21 @@
+main start 
+----------GEMM 1----------
+sgemm_profile end, avg time = 2.18, GFLOPS = 1053.70
+----------GEMM 2----------
+sgemm_profile end, avg time = 2.26, GFLOPS = 1014.40
+----------GEMM 3----------
+sgemm_profile end, avg time = 1.42, GFLOPS = 1639.65
+----------GEMM 4----------
+sgemm_profile end, avg time = 0.12, GFLOPS = 1067.20
+----------GEMM 5----------
+sgemm_profile end, avg time = 0.06, GFLOPS = 2166.67
+----------GEMM 6----------
+sgemm_profile end, avg time = 0.10, GFLOPS = 1282.56
+----------GEMM 7----------
+sgemm_profile end, avg time = 0.14, GFLOPS = 1829.49
+----------GEMM 8----------
+sgemm_profile end, avg time = 0.12, GFLOPS = 2166.67
+----------GEMM 9----------
+sgemm_profile end, avg time = 2.16, GFLOPS = 480.93
+----------GEMM 10----------
+sgemm_profile end, avg time = 0.14, GFLOPS = 1830.40
