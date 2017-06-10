@@ -68,7 +68,7 @@ int main(void)
     char transa, transb;
     int m,n,k,lda,ldb,ldc;
     float alpha,beta;
-/*  //BDW
+  //BDW
     transa='t'; transb='n'; m=35820; n=64; k=500; lda=500; alpha=1.0000; ldb=500; beta=0.0000; ldc=35820;
     sgemm_main(1, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
     transa='n'; transb='n'; m=500; n=64; k=35820; lda=500; alpha=1.0000; ldb=35820; beta=0.0000; ldc=500;
@@ -89,8 +89,8 @@ int main(void)
     sgemm_main(9, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
     transa='t'; transb='n'; m=2000; n=64; k=1000; lda=1000; alpha=1.0000; ldb=1000; beta=0.0000; ldc=2000;
     sgemm_main(10, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
-*/
 
+/*  //KNL
     transa=110; transb=116; m=500; n=35820; k=64; lda=500; alpha=1.0000; ldb=35820; beta=1.0000; ldc=500;
     sgemm_main(1, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
     transa=110; transb=116; m=500; n=2000; k=64; lda=500; alpha=1.0000; ldb=2000; beta=1.0000; ldc=500;
@@ -112,7 +112,7 @@ int main(void)
     transa=110; transb=116; m=1000; n=500; k=64; lda=1000; alpha=1.0000; ldb=500; beta=1.0000; ldc=1000;
     sgemm_main(10, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
 
-
+*/
 
 
     return 1;
