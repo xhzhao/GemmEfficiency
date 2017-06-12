@@ -1,5 +1,5 @@
 CC=gcc
-MKL_DNN_ROOT=/home/xiaohui/MKLs/mklml_lnx_2017.0.2.20170209
+MKL_DNN_ROOT=~/MKL/EnvCheck/MKL/mklml_lnx_2017.0.2.20170209/
 
 COPT = -Wall
 INC  = -I$(MKL_DNN_ROOT)/include

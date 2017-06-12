@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/time.h>
-#include <mkl_cblas.h>
+//#include <mkl_cblas.h>
 
 
 #define SGEMM_COUNT 50		    // every sgemm iteration numbers
