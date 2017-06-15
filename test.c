@@ -5,7 +5,7 @@
 //#include <mkl_cblas.h>
 
 
-#define SGEMM_COUNT 50		    // every sgemm iteration numbers
+#define SGEMM_COUNT 5000		    // every sgemm iteration numbers
 #define HW_GFLOPS   3097 
 
 //get the system time in ms
