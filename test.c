@@ -44,12 +44,13 @@ void sgemm_opt(int index, char* pTransA, char* pTransB, const int* pM, const int
             sgemm_pcall = sgemm4_opt;break;
         case 5:
             sgemm_pcall = sgemm5_opt;break;
+        default:
+            sgemm_pcall = sgemm_;break;
     } 
 
     for(i=0; i < SGEMM_COUNT; i++)
     {
         sgemm_pcall(pTransA, pTransB, pM, pN, pK, pAlpha, pa, plda, pb, pldb, pBeta, pc, pldc);
-        
     }
     double t1 = get_time() - t0;
     double avg_time = t1/SGEMM_COUNT;
@@ -67,7 +68,6 @@ void sgemm_mkl(char* pTransA, char* pTransB, const int* pM, const int* pN, const
     for(i=0; i < SGEMM_COUNT; i++)
     {
         sgemm_(pTransA, pTransB, pM, pN, pK, pAlpha, pa, plda, pb, pldb, pBeta, pc, pldc);
-        
     }
     double t1 = get_time() - t0;
     double avg_time = t1/SGEMM_COUNT;
@@ -102,8 +102,8 @@ void sgemm_main(int index, char transa, char transb, int M, int N, int K, int ld
     float * a = matrix_init(M,K);
     float * b = matrix_init(K,N);
     float * c = matrix_init(M,N);
-    float *a_mkl = malloc(M*N*sizeof(float));
-    memcpy(a_mkl, a, M*N*sizeof(float));
+    float *a_mkl = malloc(M*K*sizeof(float));
+    memcpy(a_mkl, a, M*K*sizeof(float));
 
      float *b_mkl = malloc(K*N*sizeof(float));
     memcpy(b_mkl, b, K*N*sizeof(float));
