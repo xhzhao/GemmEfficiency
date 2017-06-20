@@ -2,4 +2,4 @@
 
 source ~/.bashrc
 
- ./test.bin
+OMP_NUM_THEARDS=52 ./test.bin

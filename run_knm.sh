@@ -2,4 +2,4 @@
 
 source ~/.bashrc
 
-OMP_NUM_THREADS=72 ./test.bin
+KMP_AFFINITY=scatter,granularity=fine OMP_NUM_THREADS=72 ./test.bin
