@@ -8,7 +8,8 @@
 #include "immintrin.h"
 #include<math.h>
 
-#define SGEMM_COUNT 500		    // every sgemm iteration numbers
+#define SGEMM_COUNT  1		    // every sgemm iteration numbers
+#define BUFFER_COUNT 100		    // cause cache miss manaully
 #define HW_GFLOPS   3097 
 
 //get the system time in ms
@@ -68,6 +69,7 @@ void sgemm_mkl(char* pTransA, char* pTransB, const int* pM, const int* pN, const
     for(i=0; i < SGEMM_COUNT; i++)
     {
         sgemm_(pTransA, pTransB, pM, pN, pK, pAlpha, pa, plda, pb, pldb, pBeta, pc, pldc);
+        //cblas_sgemm(CblasRowMajor,CblasNoTrans,CblasNoTrans, *pM, *pN, *pK, *pAlpha, pa, *plda, pb, *pldb, *pBeta, pc, *pldc);
     }
     double t1 = get_time() - t0;
     double avg_time = t1/SGEMM_COUNT;
@@ -78,25 +80,68 @@ float* matrix_init(int A, int B)
 {
     float * p = malloc(A*B*sizeof(float));
     int a,b;
+#pragma omp parallel for
     for(a=0; a < A; a++)
         for(b=0; b < B;b++)
-            p[a*B+b] = rand() % 1000; 
+            p[a*B+b] = (float)(rand() % 1000)/100; 
     return p;
 }
 
 void verify_result(float *c, float *c_mkl, int M, int N)
 {
     int i, j;
+
     for(i=0; i < M; i++)
-        for(j=0; j <=N;j++){
+        for(j=0; j < N;j++){
             if(fabs((c[i*N+j] -c_mkl[i*N + j])) > 0.01) {
-                printf("result mismatch\n");
+                printf("result mismatch, i = %d, j = %d, a = %.4f, b = %.4f\n", i,j,c[i*N+j],c_mkl[i*N + j]);
                 return;
             }
 
         }
-    return;
+    printf("verify result OK.");
 }
+
+
+void sgemm_main_cahceMiss(int index, char transa, char transb, int M, int N, int K, int lda, float alpha, int ldb, float beta, int ldc)
+{
+
+    float * a[BUFFER_COUNT] = 0;
+    float * b[BUFFER_COUNT] = 0;
+    float * c[BUFFER_COUNT] = 0;
+    int i = 0;
+    int j = 0;
+    for(i = 0; i < BUFFER_COUNT; i++)
+    {
+        a[i] = matrix_init(M,K);
+        b[i] = matrix_init(K,N);
+        c[i] = matrix_init(M,N);
+    }
+    printf("----------GEMM %d----------\n", index);
+    float f_M = M;
+    float f_N = N;
+    float f_K = K;
+    double gflops = (f_M*f_N*f_K*2 + 2*f_M*f_N ) * (1e-6);
+    double t0 = get_time();
+    for(i=0; i < SGEMM_COUNT; i++)
+    {
+        j = i%BUFFER_COUNT;
+        sgemm_(&transa, &transb, &M, &N, &K, &alpha, a[j], &lda, b[j], &ldb, &beta, c[j], &ldc);
+    }
+    double t1 = get_time() - t0;
+    double avg_time = t1/SGEMM_COUNT;
+    printf("sgemm_mkl cacheMiss, avg time = %.2f, GFLOPS = %.2f\n", avg_time, gflops/avg_time);
+    for(i = 0; i < BUFFER_COUNT; i++)
+    {
+        free(a[i]);
+        free(b[i]);
+        free(c[i]);
+    }
+
+ 
+
+}
+
 void sgemm_main(int index, char transa, char transb, int M, int N, int K, int lda, float alpha, int ldb, float beta, int ldc)
 {
     float * a = matrix_init(M,K);
@@ -115,6 +160,8 @@ void sgemm_main(int index, char transa, char transb, int M, int N, int K, int ld
     sgemm_opt(index,&transa, &transb, &M, &N, &K, &alpha, a, &lda, b, &ldb, &beta, c, &ldc);
     sgemm_mkl(&transa, &transb, &M, &N, &K, &alpha, a_mkl, &lda, b_mkl, &ldb, &beta, c_mkl, &ldc);
 
+
+
    verify_result(c, c_mkl, M, N);
 
         
@@ -130,8 +177,9 @@ int main(void)
     char transa, transb;
     int m,n,k,lda,ldb,ldc;
     float alpha,beta;
-    transa='n'; transb='n'; m=500; n=64; k=35820; lda=500; alpha=1.0000; ldb=35820; beta=0.0000; ldc=500;
-    sgemm_main(2, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+
+    transa='n'; transb='t'; m=512; n=2000; k=64; lda=512; alpha=1; ldb=2000; beta=0; ldc=512;
+    sgemm_main(5, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
 
 #if 0
     transa='t'; transb='n'; m=35820; n=64; k=500; lda=500; alpha=1.0000; ldb=500; beta=0.0000; ldc=35820;
@@ -156,6 +204,29 @@ int main(void)
     sgemm_main(10, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
 #endif
 
+#if 0
+    transa='t'; transb='n'; m=35820; n=64; k=500; lda=500; alpha=1.0000; ldb=500; beta=0.0000; ldc=35820;
+    sgemm_main_cahceMiss(1, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    transa='n'; transb='n'; m=500; n=64; k=35820; lda=500; alpha=1.0000; ldb=35820; beta=0.0000; ldc=500;
+    sgemm_main_cahceMiss(2, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    transa='n'; transb='t'; m=500; n=35820; k=64; lda=500; alpha=1.0000; ldb=35820; beta=1.0000; ldc=500;
+    sgemm_main_cahceMiss(3, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    transa='n'; transb='n'; m=500; n=64; k=2000; lda=500; alpha=1.0000; ldb=2000; beta=0.0000; ldc=500;
+    sgemm_main_cahceMiss(4, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    transa='n'; transb='t'; m=500; n=2000; k=64; lda=500; alpha=1.0000; ldb=2000; beta=1.0000; ldc=500;
+    sgemm_main_cahceMiss(5, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    transa='t'; transb='n'; m=2000; n=64; k=500; lda=500; alpha=1.0000; ldb=500; beta=0.0000; ldc=2000;
+    sgemm_main_cahceMiss(6, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    transa='n'; transb='n'; m=1000; n=64; k=2000; lda=1000; alpha=1.0000; ldb=2000; beta=0.0000; ldc=1000;
+    sgemm_main_cahceMiss(7, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    transa='n'; transb='t'; m=1000; n=2000; k=64; lda=1000; alpha=1.0000; ldb=2000; beta=1.0000; ldc=1000;
+    sgemm_main_cahceMiss(8, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    transa='n'; transb='n'; m=500; n=29; k=35820; lda=500; alpha=1.0000; ldb=35820; beta=0.0000; ldc=500;
+    sgemm_main_cahceMiss(9, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    transa='t'; transb='n'; m=2000; n=64; k=1000; lda=1000; alpha=1.0000; ldb=1000; beta=0.0000; ldc=2000;
+    sgemm_main_cahceMiss(10, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+
+#endif
 
     return 1;
 }
