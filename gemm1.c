@@ -10,22 +10,8 @@
 
 #define THREAD_NUM  10
 
-void trans(int M, int N, float a[M][N])
-{
-    int m = 0;
-    int n = 0;
-    float tmp;
-    for(m = 0; m < M; m++)
-      for(n = 0; n < N; n++)
-      {
-        tmp = a[m][n];
-        a[m][n] = a[n][m];
-        a[n][m] = tmp;
-      }
-}
 
-
-void sgemm5_opt( char* pTransA, char* pTransB, const int* pM, const int* pN, const int* pK, const float *pAlpha, const float *pa, const int*plda, const float *pb, const int *pldb, const float *pBeta, float *pc, const int*pldc)
+void sgemm1_opt( char* pTransA, char* pTransB, const int* pM, const int* pN, const int* pK, const float *pAlpha, const float *pa, const int*plda, const float *pb, const int *pldb, const float *pBeta, float *pc, const int*pldc)
 {
 
   const int M = *pM;
@@ -37,7 +23,7 @@ void sgemm5_opt( char* pTransA, char* pTransB, const int* pM, const int* pN, con
   float alpha = *pAlpha;
   float beta = *pBeta;
   const int row_per_thread = M/THREAD_NUM;
-  printf("sgemm5_opt start, m = %d, n =%d, k = %d, row_per_thread = %d\n",M,N,K,row_per_thread);
+  printf("sgemm1_opt start, m = %d, n =%d, k = %d, row_per_thread = %d\n",M,N,K,row_per_thread);
 
 #pragma omp parallel num_threads(THREAD_NUM)
   {
@@ -46,14 +32,14 @@ void sgemm5_opt( char* pTransA, char* pTransB, const int* pM, const int* pN, con
     int i=0;
     for(i = tid*row_per_thread ; i < (tid+1)*row_per_thread ; i++) {
 
-      float * bA = pa + i  ;
+      float * bA = pa + i * lda  ;
       int j = 0;
       for(j = 0; j < N; j++){
         float sum = 0;
-        float * bB = pb + j ;
+        float * bB = pb + j * ldb ;
         int l = 0;
         for(l = 0; l < K; l++){
-            sum += bA[l*lda]*bB[l*ldb];
+            sum += bA[l]*bB[l];
         }
         if (beta == 0)
           pc[j*ldc+i] = alpha*sum;

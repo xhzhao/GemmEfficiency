@@ -22,6 +22,7 @@ double get_time(void)
 }
 
 extern void sgemm_(char*, char*, const int*, const int*, const int*, const float *, const float *, const int*, const float *, const int*, const float *, float *, const int*);
+extern void sgemm1_opt(char*, char*, const int*, const int*, const int*, const float *, const float *, const int*, const float *, const int*, const float *, float *, const int*);
 extern void sgemm3_opt(char*, char*, const int*, const int*, const int*, const float *, const float *, const int*, const float *, const int*, const float *, float *, const int*);
 extern void sgemm4_opt(char*, char*, const int*, const int*, const int*, const float *, const float *, const int*, const float *, const int*, const float *, float *, const int*);
 extern void sgemm5_opt(char*, char*, const int*, const int*, const int*, const float *, const float *, const int*, const float *, const int*, const float *, float *, const int*);
@@ -39,6 +40,8 @@ void sgemm_opt(int index, char* pTransA, char* pTransB, const int* pM, const int
     void (* sgemm_pcall)(char*, char*, const int*, const int*, const int*, const float *, const float *, const int*, const float *, const int*, const float *, float *, const int*);
    
     switch(index){
+        case 1:
+            sgemm_pcall = sgemm1_opt;break;
         case 3:
             sgemm_pcall = sgemm3_opt;break;
         case 4:
@@ -180,6 +183,8 @@ int main(void)
     int m,n,k,lda,ldb,ldc;
     float alpha,beta;
 
+    transa='t'; transb='n'; m=35820; n=64; k=500; lda=500; alpha=1.0000; ldb=500; beta=0.0000; ldc=35820;
+    sgemm_main(1, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
     transa='n'; transb='t'; m=500; n=35820; k=64; lda=500; alpha=1.0000; ldb=35820; beta=1.0000; ldc=500;
     sgemm_main(3, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
     transa='n'; transb='n'; m=500; n=64; k=2000; lda=500; alpha=1.0000; ldb=2000; beta=0.0000; ldc=500;
