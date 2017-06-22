@@ -28,27 +28,26 @@ void trans(int M, int N, float a[M][N])
 void sgemm5_opt( char* pTransA, char* pTransB, const int* pM, const int* pN, const int* pK, const float *pAlpha, const float *pa, const int*plda, const float *pb, const int *pldb, const float *pBeta, float *pc, const int*pldc)
 {
 
-  const int m = *pM;
-  const int n = *pN;
-  const int k = *pK;
+  const int M = *pM;
+  const int N = *pN;
+  const int K = *pK;
   const int lda = *plda;
   const int ldb = *pldb;
   const int ldc = *pldc;
   float alpha = *pAlpha;
   float beta = *pBeta;
-  const int row_per_thread = m/THREAD_NUM;
-  printf("sgemm5_opt start, m = %d, n =%d, k = %d, row_per_thread = %d\n",m,n,k,row_per_thread);
-  //trans(K,N,pb);
+  const int row_per_thread = M/THREAD_NUM;
+  printf("sgemm5_opt start, m = %d, n =%d, k = %d, row_per_thread = %d\n",M,N,K,row_per_thread);
   int i,j,l;
 
     float * a_ = pa;
-    for(i = 0; i < m; i++)
+    for(i = 0; i < M; i++)
       {
         float *b_ = pb;
-        for(j = 0; j < n; j++)
+        for(j = 0; j < N; j++)
         {
           float sum = 0;
-          for(l = 0; l < k; l++)
+          for(l = 0; l < K; l++)
             sum += a_[l*lda]*b_[l*ldb];
           b_++;
           if (beta == 0)

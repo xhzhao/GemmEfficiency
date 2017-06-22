@@ -94,12 +94,14 @@ void verify_result(float *c, float *c_mkl, int M, int N)
     for(i=0; i < M; i++)
         for(j=0; j < N;j++){
             if(fabs((c[i*N+j] -c_mkl[i*N + j])) > 0.01) {
-                printf("result mismatch, i = %d, j = %d, a = %.4f, b = %.4f\n", i,j,c[i*N+j],c_mkl[i*N + j]);
-                return;
+                if(fabs(c[i*N+j] -c_mkl[i*N + j])/ fabs(c_mkl[i*N + j]) > 0.01 ){
+                    printf("result mismatch, i = %d, j = %d, a = %.4f, b = %.4f\n", i,j,c[i*N+j],c_mkl[i*N + j]);
+                    return;
+                }
             }
 
         }
-    printf("verify result OK.");
+    printf("verify result OK.\n");
 }
 
 
@@ -178,7 +180,11 @@ int main(void)
     int m,n,k,lda,ldb,ldc;
     float alpha,beta;
 
-    transa='n'; transb='t'; m=512; n=2000; k=64; lda=512; alpha=1; ldb=2000; beta=0; ldc=512;
+    transa='n'; transb='t'; m=500; n=35820; k=64; lda=500; alpha=1.0000; ldb=35820; beta=1.0000; ldc=500;
+    sgemm_main(3, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    transa='n'; transb='n'; m=500; n=64; k=2000; lda=500; alpha=1.0000; ldb=2000; beta=0.0000; ldc=500;
+    sgemm_main(4, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    transa='n'; transb='t'; m=500; n=2000; k=64; lda=500; alpha=1.0000; ldb=2000; beta=1.0000; ldc=500;
     sgemm_main(5, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
 
 #if 0
