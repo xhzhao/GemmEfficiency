@@ -31,6 +31,7 @@ void sgemm3_opt( char* pTransA, char* pTransB, const int* pM, const int* pN, con
     int k = *pK;
     float *AT = (float *)mkl_malloc(m*k*sizeof(float), 64);
     mkl_somatcopy('r','t', k, m, 1.0, A, m, AT, k);
+
 #define CB_ITER 32
 #define RA_ITER 4
 #define CA_ITER 4
@@ -86,10 +87,10 @@ void sgemm3_opt( char* pTransA, char* pTransB, const int* pM, const int* pN, con
              __m512 c30 = _mm512_setzero_ps();
              __m512 c31 = _mm512_setzero_ps();
 #endif            
-            for(int ca = 0; ca < k; ca = ca + RA_ITER) {      //ca = rb = 64,   k
+            for(int ca = 0; ca < k; ca = ca + CA_ITER) {      //ca = rb = 64,   k
                  float *abase = (float *)(AT + ra * k + ca);  //fetch ?
-                 float *bbase = (float *)(B + ra * n + cb);            //fetch 4 AVX512
-                 float *bbase2 = (float *)(B + ra * n + cb + 16);            //fetch 4 AVX512
+                 float *bbase = (float *)(B + ca * n + cb);            //fetch 4 AVX512
+                 float *bbase2 = (float *)(B + ca * n + cb + 16);            //fetch 4 AVX512
 
                  __m512 b00 = _mm512_load_ps(bbase);
                  __m512 b10 = _mm512_load_ps(bbase + n);
