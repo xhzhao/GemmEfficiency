@@ -31,13 +31,16 @@ void sgemm3_opt( char* pTransA, char* pTransB, const int* pM, const int* pN, con
     int k = *pK;
     float *AT = (float *)mkl_malloc(m*k*sizeof(float), 64);
     mkl_somatcopy('r','t', k, m, 1.0, A, m, AT, k);
+   for(int a=0; a < m; a++)
+        for(int b=0; b <k;b++)
+           printf("%f, ", AT[a*k+b]);
 
 #define CB_ITER 32
 #define RA_ITER 4
 #define CA_ITER 4
-#define AL 512*4 //(length of A)
+#define AL 16*4 //(length of A)
 
-#define TNUM (64)
+#define TNUM (1)
 #pragma omp parallel num_threads(TNUM)
   {
     int tid = omp_get_thread_num();
@@ -150,6 +153,7 @@ void sgemm3_opt( char* pTransA, char* pTransB, const int* pM, const int* pN, con
             }
            
             float *cbase = C + cb*m + ra;
+            float *cbase2 = C + (cb + 16)*m + ra;
              __m512i index_c0 = _mm512_set_epi32(15*AL,14*AL, 13*AL, 12*AL, 11*AL,10*AL,9*AL,8*AL,7*AL
                                                  ,6*AL, 5*AL,4*AL,3*AL,2*AL,1*AL,0);
 
@@ -158,10 +162,10 @@ void sgemm3_opt( char* pTransA, char* pTransB, const int* pM, const int* pN, con
             _mm512_i32scatter_ps((void*)(cbase + 2),index_c0,c2,1);
             _mm512_i32scatter_ps((void*)(cbase + 3),index_c0,c3,1);
 
-            _mm512_i32scatter_ps((void*)(cbase + 4),index_c0,c4,1);
-            _mm512_i32scatter_ps((void*)(cbase + 5),index_c0,c5,1);
-            _mm512_i32scatter_ps((void*)(cbase + 6),index_c0,c6,1);
-            _mm512_i32scatter_ps((void*)(cbase + 7),index_c0,c7,1);
+            _mm512_i32scatter_ps((void*)(cbase2),index_c0,c4,1);
+            _mm512_i32scatter_ps((void*)(cbase2 + 1),index_c0,c5,1);
+            _mm512_i32scatter_ps((void*)(cbase2 + 2),index_c0,c6,1);
+            _mm512_i32scatter_ps((void*)(cbase2 + 3),index_c0,c7,1);
 #if 0
             _mm512_i32scatter_ps((void*)(cbase + 8),index_c0,c8,1);
             _mm512_i32scatter_ps((void*)(cbase + 9),index_c0,c9,1);
