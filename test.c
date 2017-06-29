@@ -185,7 +185,8 @@ int main(void)
 
     transa='t'; transb='n'; m=35820; n=64; k=500; lda=500; alpha=1.0000; ldb=500; beta=0.0000; ldc=35820;
     sgemm_main(1, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
-    transa='n'; transb='t'; m=500; n=35820; k=64; lda=500; alpha=1.0000; ldb=35820; beta=1.0000; ldc=500;
+    //transa='n'; transb='t'; m=500; n=35820; k=64; lda=500; alpha=1.0000; ldb=35820; beta=1.0000; ldc=500;
+    transa='n'; transb='t'; m=512; n=35840; k=64; lda=512; alpha=1.0000; ldb=35840; beta=0.0; ldc=512;
     sgemm_main(3, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
     transa='n'; transb='n'; m=500; n=64; k=2000; lda=500; alpha=1.0000; ldb=2000; beta=0.0000; ldc=500;
     sgemm_main(4, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
