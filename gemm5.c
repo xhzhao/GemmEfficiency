@@ -44,20 +44,20 @@ void sgemm5_test( char* pTransA, char* pTransB, const int* pM, const int* pN, co
   const int ldc = *pldc;
   float alpha = *pAlpha;
   float beta = *pBeta;
-  const int row_per_thread = M/THREAD_NUM;
-  printf("sgemm5_test start, m = %d, n =%d, k = %d, row_per_thread = %d\n",M,N,K,row_per_thread);
+  const int col_per_thread = N/THREAD_NUM;
+  printf("sgemm5_test start, m = %d, n =%d, k = %d, row_per_thread = %d\n",M,N,K,col_per_thread);
 
 #pragma omp parallel num_threads(THREAD_NUM)
   {
     int tid = omp_get_thread_num();
-    int i=0;
-    for(i = tid*row_per_thread ; i < (tid+1)*row_per_thread ; i++) {
 
-      float * bA = pa + i * K  ;
-      int j = 0;
-      for(j = 0; j < N; j++){
+    int j = 0;
+    for(j = tid*col_per_thread ; j < (tid+1)*col_per_thread ; j++) {
+      int i=0;
+      for(i = 0; i < M; i++){
         float sum = 0;
         float * bB = pb + j ;
+        float * bA = pa + i * K  ;
         int l = 0;
         for(l = 0; l < K; l++){
             sum += bA[l]*bB[l*ldb];
