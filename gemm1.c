@@ -66,7 +66,7 @@ void sgemm1_opt( char* pTransA, char* pTransB, const int* pM, const int* pN, con
 
 }
 */
-
+#if 1
 void sgemm1_opt( char* pTransA, char* pTransB, const int* pM, const int* pN, const int* pK, const float *pAlpha, const float *pa, const int*plda, const float *pb, const int *pldb, const float *pBeta, float *pc, const int*pldc)
 {
 
