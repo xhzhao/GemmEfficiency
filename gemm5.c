@@ -10,6 +10,7 @@
 
 #define THREAD_NUM  10
 
+/*
 void trans(int M, int N, float a[M][N])
 {
     int m = 0;
@@ -23,8 +24,69 @@ void trans(int M, int N, float a[M][N])
         a[n][m] = tmp;
       }
 }
+*/
 
 
+#include <mkl.h>
+
+extern float * buffer;
+
+extern void transpose( int M, int N, float * a);
+
+void sgemm5_test( char* pTransA, char* pTransB, const int* pM, const int* pN, const int* pK, const float *pAlpha, const float *pa, const int*plda, const float *pb, const int *pldb, const float *pBeta, float *pc, const int*pldc)
+{
+
+  const int M = *pM;
+  const int N = *pN;
+  const int K = *pK;
+  const int lda = *plda;
+  const int ldb = *pldb;
+  const int ldc = *pldc;
+  float alpha = *pAlpha;
+  float beta = *pBeta;
+  const int row_per_thread = M/THREAD_NUM;
+  printf("sgemm5_test start, m = %d, n =%d, k = %d, row_per_thread = %d\n",M,N,K,row_per_thread);
+
+#pragma omp parallel num_threads(THREAD_NUM)
+  {
+    int tid = omp_get_thread_num();
+    int i=0;
+    for(i = tid*row_per_thread ; i < (tid+1)*row_per_thread ; i++) {
+
+      float * bA = pa + i * K  ;
+      int j = 0;
+      for(j = 0; j < N; j++){
+        float sum = 0;
+        float * bB = pb + j ;
+        int l = 0;
+        for(l = 0; l < K; l++){
+            sum += bA[l]*bB[l*ldb];
+        }
+        if (beta == 0)
+          pc[j*ldc+i] = alpha*sum;
+        else
+          pc[j*ldc+i] = beta*pc[j*ldc+i]+alpha*sum;
+      }
+    }
+  }
+
+}
+
+
+void sgemm5_opt( char* pTransA, char* pTransB, const int* pM, const int* pN, const int* pK, const float *pAlpha, const float *pa, const int*plda, const float *pb, const int *pldb, const float *pBeta, float *pc, const int*pldc)
+{
+  if(buffer == NULL)
+  {
+     buffer = malloc(64*500*sizeof(float));
+  }
+  //transpose(*pK, *pM, pa);
+  mkl_somatcopy('r','t', 64, 500, 1.0, pa, 500, buffer, 64);
+  sgemm5_test(pTransA,pTransB,pM,pN,pK,pAlpha,buffer,pK,pb,pldb,pBeta,pc,pldc);
+   
+}
+
+
+#if 0
 void sgemm5_opt( char* pTransA, char* pTransB, const int* pM, const int* pN, const int* pK, const float *pAlpha, const float *pa, const int*plda, const float *pb, const int *pldb, const float *pBeta, float *pc, const int*pldc)
 {
 
@@ -64,3 +126,4 @@ void sgemm5_opt( char* pTransA, char* pTransB, const int* pM, const int* pN, con
   }
 
 }
+#endif
