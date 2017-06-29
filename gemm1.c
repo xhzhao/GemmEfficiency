@@ -7,9 +7,65 @@
 //#include "mkl.h"
 #include "immintrin.h"
 #include<math.h>
+#include <mkl.h>
+#define THREAD_NUM  90
 
-#define THREAD_NUM  60
+//float buffer[35820][35820];
+//float buffer[35820][512];
+float * buffer = NULL;
 
+void transpose( int M, int N, float * a)
+{
+  //mkl_simatcopy('r', 't', M, N, 1.0, a, N, M);
+  mkl_somatcopy('r','t', N, M, 1.0, a, M, buffer, N);
+}
+
+/*
+void sgemm4_test( char* pTransA, char* pTransB, const int* pM, const int* pN, const int* pK, const float *pAlpha, const float *pa, const int*plda, const float *pb, const int *pldb, const float *pBeta, float *pc, const int*pldc)
+{
+    printf("sgemm4_opt start \n");
+
+  const int M = *pM;
+  const int N = *pN;
+  const int K = *pK;
+  const int lda = *plda;
+  const int ldb = *pldb;
+  const int ldc = *pldc;
+  float alpha = *pAlpha;
+  float beta = *pBeta;
+  const int row_per_thread = M/THREAD_NUM;
+  printf("sgemm5_opt start, m = %d, n =%d, k = %d, row_per_thread = %d\n",M,N,K,row_per_thread);
+  int i,j,l;
+
+      float * a_ = pa;
+      for(i = 0; i < M; i++)
+      {
+        float *b_ = pb;
+        for(j = 0; j < N; j++)
+        {
+          float sum = 0;
+          for(l = 0; l < K; l++)
+            sum += a_[l*lda]*b_[l];
+          b_ += ldb;
+          pc[j*ldc+i] = beta*pc[j*ldc+i]+alpha*sum;
+        }
+        a_++;
+      }
+
+
+}
+void sgemm1_opt( char* pTransA, char* pTransB, const int* pM, const int* pN, const int* pK, const float *pAlpha, const float *pa, const int*plda, const float *pb, const int *pldb, const float *pBeta, float *pc, const int*pldc)
+{
+  if(buffer == NULL)
+  {
+     buffer = malloc(64*512*sizeof(float));
+  }
+  transpose( 64,512, pa);
+  //sgemm4_test(pTransA,pTransB,pM,pN,pK,pAlpha,pa,pM,pb,pldb,pBeta,pc,pldc);
+  //sgemm4_test(pTransA,pTransB,pM,pN,pK,pAlpha,pa,pM,buffer,pldb,pBeta,pc,pldc);
+
+}
+*/
 
 void sgemm1_opt( char* pTransA, char* pTransB, const int* pM, const int* pN, const int* pK, const float *pAlpha, const float *pa, const int*plda, const float *pb, const int *pldb, const float *pBeta, float *pc, const int*pldc)
 {
@@ -46,9 +102,10 @@ void sgemm1_opt( char* pTransA, char* pTransB, const int* pM, const int* pN, con
         __m512 c_sum_2 = _mm512_setzero_ps();
         __m512 c_sum_3 = _mm512_setzero_ps();
         int kk = 0;
+        float * a_base = bA;
+        float * b_base = bB;
         for(kk = 0; kk < K/64; kk++){
-          float * a_base = bA + kk * 64;
-          float * b_base = bB + kk * 64;
+
 
           __m512 a_0_15  = _mm512_load_ps(a_base );
           __m512 b_0_15  = _mm512_load_ps(b_base);
@@ -63,7 +120,9 @@ void sgemm1_opt( char* pTransA, char* pTransB, const int* pM, const int* pN, con
 
           c_32_47 = _mm512_fmadd_ps(a_32_47, b_32_47, c_32_47);
           c_48_63 = _mm512_fmadd_ps(a_48_63, b_48_63, c_48_63);
-            
+          
+          a_base += 64;
+          b_base += 64; 
         }
 
         c_sum_1 = _mm512_add_ps(c_0_15, c_16_31);
@@ -82,6 +141,5 @@ void sgemm1_opt( char* pTransA, char* pTransB, const int* pM, const int* pN, con
   }
 
 
-
-
 }
+#endif
