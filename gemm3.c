@@ -31,16 +31,17 @@ void sgemm3_opt( char* pTransA, char* pTransB, const int* pM, const int* pN, con
     int k = *pK;
     float *AT = (float *)mkl_malloc(m*k*sizeof(float), 64);
     mkl_somatcopy('r','t', k, m, 1.0, A, m, AT, k);
+/*
    for(int a=0; a < m; a++)
         for(int b=0; b <k;b++)
            printf("%f, ", AT[a*k+b]);
-
+*/
 #define CB_ITER 32
 #define RA_ITER 4
 #define CA_ITER 4
-#define AL 16*4 //(length of A)
+#define AL 512*4 //(length of A)
 
-#define TNUM (1)
+#define TNUM (64)
 #pragma omp parallel num_threads(TNUM)
   {
     int tid = omp_get_thread_num();
