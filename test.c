@@ -4,11 +4,11 @@
 #include <sys/time.h>
 #include <mkl_cblas.h>
 #include "omp.h"
-//#include "mkl.h"
+#include "mkl.h"
 #include "immintrin.h"
 #include<math.h>
 
-#define SGEMM_COUNT  1		    // every sgemm iteration numbers
+#define SGEMM_COUNT  5000		    // every sgemm iteration numbers
 #define BUFFER_COUNT 100		    // cause cache miss manaully
 #define HW_GFLOPS   3097 
 
@@ -81,7 +81,7 @@ void sgemm_mkl(char* pTransA, char* pTransB, const int* pM, const int* pN, const
 
 float* matrix_init(int A, int B)
 {
-    float * p = malloc(A*B*sizeof(float));
+    float * p = mkl_malloc(A*B*sizeof(float), 1024*1024*2);
     int a,b;
 #pragma omp parallel for
     for(a=0; a < A; a++)
@@ -162,17 +162,18 @@ void sgemm_main(int index, char transa, char transb, int M, int N, int K, int ld
     memcpy(c_mkl, c, M*N*sizeof(float));
     
     printf("----------GEMM %d----------\n", index);
-    sgemm_opt(index,&transa, &transb, &M, &N, &K, &alpha, a, &lda, b, &ldb, &beta, c, &ldc);
     sgemm_mkl(&transa, &transb, &M, &N, &K, &alpha, a_mkl, &lda, b_mkl, &ldb, &beta, c_mkl, &ldc);
+    sgemm_opt(index,&transa, &transb, &M, &N, &K, &alpha, a, &lda, b, &ldb, &beta, c, &ldc);
+
 
 
 
    verify_result(c, c_mkl, M, N);
 
         
-    free(a);
-    free(b);
-    free(c);
+    mkl_free(a);
+    mkl_free(b);
+    mkl_free(c);
 }
 
 
@@ -183,15 +184,10 @@ int main(void)
     int m,n,k,lda,ldb,ldc;
     float alpha,beta;
 
-    transa='t'; transb='n'; m=35820; n=64; k=500; lda=500; alpha=1.0000; ldb=500; beta=0.0000; ldc=35820;
-    sgemm_main(1, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
-    //transa='n'; transb='t'; m=500; n=35820; k=64; lda=500; alpha=1.0000; ldb=35820; beta=1.0000; ldc=500;
-    transa='n'; transb='t'; m=512; n=35840; k=64; lda=512; alpha=1.0000; ldb=35840; beta=0.0; ldc=512;
-    sgemm_main(3, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
     transa='n'; transb='n'; m=500; n=64; k=2000; lda=500; alpha=1.0000; ldb=2000; beta=0.0000; ldc=500;
     sgemm_main(4, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
-    transa='n'; transb='t'; m=500; n=2000; k=64; lda=500; alpha=1.0000; ldb=2000; beta=1.0000; ldc=500;
-    sgemm_main(5, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    transa='n'; transb='n'; m=1000; n=64; k=2000; lda=1000; alpha=1.0000; ldb=2000; beta=0.0000; ldc=1000;
+    sgemm_main(4, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
 
 #if 0
     transa='t'; transb='n'; m=35820; n=64; k=500; lda=500; alpha=1.0000; ldb=500; beta=0.0000; ldc=35820;
