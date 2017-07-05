@@ -8,7 +8,7 @@
 #include "immintrin.h"
 #include<math.h>
 
-#define SGEMM_COUNT  5000		    // every sgemm iteration numbers
+#define SGEMM_COUNT  1		    // every sgemm iteration numbers
 #define BUFFER_COUNT 100		    // cause cache miss manaully
 #define HW_GFLOPS   3097 
 
@@ -26,6 +26,7 @@ extern void sgemm1_opt(char*, char*, const int*, const int*, const int*, const f
 extern void sgemm3_opt(char*, char*, const int*, const int*, const int*, const float *, const float *, const int*, const float *, const int*, const float *, float *, const int*);
 extern void sgemm4_opt(char*, char*, const int*, const int*, const int*, const float *, const float *, const int*, const float *, const int*, const float *, float *, const int*);
 extern void sgemm5_opt(char*, char*, const int*, const int*, const int*, const float *, const float *, const int*, const float *, const int*, const float *, float *, const int*);
+extern void sgemm11_opt(char*, char*, const int*, const int*, const int*, const float *, const float *, const int*, const float *, const int*, const float *, float *, const int*);
 
 
 // profile for one type of sgemm, 50 iterations
@@ -48,6 +49,8 @@ void sgemm_opt(int index, char* pTransA, char* pTransB, const int* pM, const int
             sgemm_pcall = sgemm4_opt;break;
         case 5:
             sgemm_pcall = sgemm5_opt;break;
+        case 11:
+            sgemm_pcall = sgemm11_opt;break;
         default:
             sgemm_pcall = sgemm_;break;
     } 
@@ -184,10 +187,10 @@ int main(void)
     int m,n,k,lda,ldb,ldc;
     float alpha,beta;
 
-    transa='n'; transb='n'; m=500; n=64; k=2000; lda=500; alpha=1.0000; ldb=2000; beta=0.0000; ldc=500;
-    sgemm_main(4, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
-    transa='n'; transb='n'; m=1000; n=64; k=2000; lda=1000; alpha=1.0000; ldb=2000; beta=0.0000; ldc=1000;
-    sgemm_main(4, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+
+
+
+
 
 #if 0
     transa='t'; transb='n'; m=35820; n=64; k=500; lda=500; alpha=1.0000; ldb=500; beta=0.0000; ldc=35820;
@@ -233,6 +236,63 @@ int main(void)
     sgemm_main_cahceMiss(9, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
     transa='t'; transb='n'; m=2000; n=64; k=1000; lda=1000; alpha=1.0000; ldb=1000; beta=0.0000; ldc=2000;
     sgemm_main_cahceMiss(10, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+
+#endif
+
+#if 0
+
+    transa='n'; transb='n';
+
+    m=500; n=1; k=25; lda=500; alpha=1.0000; ldb=25; beta=0.0000; ldc=500;
+    sgemm_main(11, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    m=500; n=1; k=20; lda=500; alpha=1.0000; ldb=20; beta=0.0000; ldc=500;
+    sgemm_main(11, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    m=500; n=1; k=21; lda=500; alpha=1.0000; ldb=21; beta=0.0000; ldc=500;
+    sgemm_main(11, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    m=500; n=1; k=18; lda=500; alpha=1.0000; ldb=18; beta=0.0000; ldc=500;
+    sgemm_main(11, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    m=500; n=1; k=30; lda=500; alpha=1.0000; ldb=30; beta=0.0000; ldc=500;
+    sgemm_main(11, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    m=500; n=1; k=11; lda=500; alpha=1.0000; ldb=11; beta=0.0000; ldc=500;
+    sgemm_main(11, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    m=500; n=1; k=15; lda=500; alpha=1.0000; ldb=15; beta=0.0000; ldc=500;
+    sgemm_main(11, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    m=500; n=1; k=24; lda=500; alpha=1.0000; ldb=24; beta=0.0000; ldc=500;
+    sgemm_main(11, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    m=500; n=1; k=31; lda=500; alpha=1.0000; ldb=31; beta=0.0000; ldc=500;
+    sgemm_main(11, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    m=500; n=1; k=29; lda=500; alpha=1.0000; ldb=29; beta=0.0000; ldc=500;
+    sgemm_main(11, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    m=500; n=1; k=41; lda=500; alpha=1.0000; ldb=41; beta=0.0000; ldc=500;
+    sgemm_main(11, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    m=500; n=1; k=33; lda=500; alpha=1.0000; ldb=33; beta=0.0000; ldc=500;
+    sgemm_main(11, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    m=500; n=1; k=38; lda=500; alpha=1.0000; ldb=38; beta=0.0000; ldc=500;
+    sgemm_main(11, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    m=500; n=1; k=39; lda=500; alpha=1.0000; ldb=39; beta=0.0000; ldc=500;
+    sgemm_main(11, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    m=500; n=1; k=28; lda=500; alpha=1.0000; ldb=28; beta=0.0000; ldc=500;
+    sgemm_main(11, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    m=500; n=1; k=34; lda=500; alpha=1.0000; ldb=34; beta=0.0000; ldc=500;
+    sgemm_main(11, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    m=500; n=1; k=27; lda=500; alpha=1.0000; ldb=27; beta=0.0000; ldc=500;
+    sgemm_main(11, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    m=500; n=1; k=26; lda=500; alpha=1.0000; ldb=26; beta=0.0000; ldc=500;
+    sgemm_main(11, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    m=500; n=1; k=23; lda=500; alpha=1.0000; ldb=23; beta=0.0000; ldc=500;
+    sgemm_main(11, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    m=500; n=1; k=9;  lda=500; alpha=1.0000; ldb=9;  beta=0.0000; ldc=500;
+    sgemm_main(11, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    m=500; n=1; k=17; lda=500; alpha=1.0000; ldb=17; beta=0.0000; ldc=500;
+    sgemm_main(11, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    m=500; n=1; k=40; lda=500; alpha=1.0000; ldb=40; beta=0.0000; ldc=500;
+    sgemm_main(11, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    m=500; n=1; k=14; lda=500; alpha=1.0000; ldb=14; beta=0.0000; ldc=500;
+    sgemm_main(11, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    m=500; n=1; k=12; lda=500; alpha=1.0000; ldb=12; beta=0.0000; ldc=500;
+    sgemm_main(11, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    m=500; n=1; k=16; lda=500; alpha=1.0000; ldb=16; beta=0.0000; ldc=500;
+    sgemm_main(11, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
 
 #endif
 

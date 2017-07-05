@@ -211,28 +211,38 @@ sgemm_opt(const uint64_t m, const uint64_t n, const uint64_t p,
 
 #undef TNUM
 }
+#define THREAD_NUM  8
 
-void sgemm4_opt(char* pTransA, char* pTransB,
-              const int* pM, const int* pN, const int* pK,
-              const float *pAlpha, const float *pa, const int*plda,
-              const float *pb, const int *pldb, const float *pBeta,
-              float *pc, const int*pldc)
+void sgemm4_opt( char* pTransA, char* pTransB, const int* pM, const int* pN, const int* pK, const float *pAlpha, const float *pa, const int*plda, const float *pb, const int *pldb, const float *pBeta, float *pc, const int*pldc)
 {
-  const uint64_t m = *pN;
-  const uint64_t n = *pM;
-  const uint64_t p = *pK;
+    printf("sgemm4_opt start \n");
 
-  const float *A = pb;
-  const float *B = pa;
-  float *C = pc;
+  const int M = *pM;
+  const int N = *pN;
+  const int K = *pK;
+  const int lda = *plda;
+  const int ldb = *pldb;
+  const int ldc = *pldc;
+  float alpha = *pAlpha;
+  float beta = *pBeta;
+  const int row_per_thread = M/THREAD_NUM;
+  printf("sgemm5_opt start, m = %d, n =%d, k = %d, row_per_thread = %d\n",M,N,K,row_per_thread);
+  int i,j,l;
+  
+      float * a_ = pa;
+      for(i = 0; i < M; i++)
+      {
+        float *b_ = pb;
+        for(j = 0; j < N; j++)
+        {
+          float sum = 0;
+          for(l = 0; l < K; l++)
+            sum += a_[l*lda]*b_[l];
+          b_ += ldb;
+          pc[j*ldc+i] = beta*pc[j*ldc+i]+alpha*sum;
+        }
+        a_++;
+      }
 
-  const float alpha = *pAlpha;
-  const float beta  = *pBeta;
 
-  assert(*pTransA == 'n' && *pTransB == 'n');
-  assert(m == 64 && (n == 500 || n == 1000) && p == 2000);
-  assert(alpha == 1.0f && beta == 0.0f);
-  assert((*pM == *plda) && (*pK == *pldb) && (*pM == *pldc));
-
-  sgemm_opt(m, n, p, alpha, A, B, beta, C);
 }
