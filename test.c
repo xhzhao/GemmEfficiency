@@ -8,7 +8,7 @@
 #include "immintrin.h"
 #include<math.h>
 
-#define SGEMM_COUNT  1		    // every sgemm iteration numbers
+#define SGEMM_COUNT  (1)		    // every sgemm iteration numbers
 #define BUFFER_COUNT 100		    // cause cache miss manaully
 #define HW_GFLOPS   3097 
 
@@ -27,7 +27,7 @@ extern void sgemm3_opt(char*, char*, const int*, const int*, const int*, const f
 extern void sgemm4_opt(char*, char*, const int*, const int*, const int*, const float *, const float *, const int*, const float *, const int*, const float *, float *, const int*);
 extern void sgemm5_opt(char*, char*, const int*, const int*, const int*, const float *, const float *, const int*, const float *, const int*, const float *, float *, const int*);
 extern void sgemm11_opt(char*, char*, const int*, const int*, const int*, const float *, const float *, const int*, const float *, const int*, const float *, float *, const int*);
-
+extern void sgemm12_opt(char*, char*, const int*, const int*, const int*, const float *, const float *, const int*, const float *, const int*, const float *, float *, const int*);
 
 // profile for one type of sgemm, 50 iterations
 void sgemm_opt(int index, char* pTransA, char* pTransB, const int* pM, const int* pN, const int* pK, const float *pAlpha, const float *pa, const int*plda, const float *pb, const int *pldb, const float *pBeta, float *pc, const int*pldc) {
@@ -36,7 +36,6 @@ void sgemm_opt(int index, char* pTransA, char* pTransB, const int* pM, const int
     float N = *pN;
     float K = *pK;
     double gflops = (M*N*K*2 + 2*M*N ) * (1e-6);
-    double t0 = get_time();
     //define function pointer
     void (* sgemm_pcall)(char*, char*, const int*, const int*, const int*, const float *, const float *, const int*, const float *, const int*, const float *, float *, const int*);
    
@@ -51,10 +50,13 @@ void sgemm_opt(int index, char* pTransA, char* pTransB, const int* pM, const int
             sgemm_pcall = sgemm5_opt;break;
         case 11:
             sgemm_pcall = sgemm11_opt;break;
+        case 12:
+            sgemm_pcall = sgemm12_opt;
         default:
             sgemm_pcall = sgemm_;break;
     } 
 
+    double t0 = get_time();
     for(i=0; i < SGEMM_COUNT; i++)
     {
         sgemm_pcall(pTransA, pTransB, pM, pN, pK, pAlpha, pa, plda, pb, pldb, pBeta, pc, pldc);
@@ -296,5 +298,59 @@ int main(void)
 
 #endif
 
+#if 0
+    transa='n', transb='n', m=500, n=25, k=1, lda=500, alpha=1.0000, ldb=1, beta=0.0000, ldc=500;
+    sgemm_main(12, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    transa='n', transb='n', m=500, n=20, k=1, lda=500, alpha=1.0000, ldb=1, beta=0.0000, ldc=500;
+    sgemm_main(12, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    transa='n', transb='n', m=500, n=21, k=1, lda=500, alpha=1.0000, ldb=1, beta=0.0000, ldc=500;
+    sgemm_main(12, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    transa='n', transb='n', m=500, n=30, k=1, lda=500, alpha=1.0000, ldb=1, beta=0.0000, ldc=500;
+    sgemm_main(12, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    transa='n', transb='n', m=500, n=11, k=1, lda=500, alpha=1.0000, ldb=1, beta=0.0000, ldc=500;
+    sgemm_main(12, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    transa='n', transb='n', m=500, n=41, k=1, lda=500, alpha=1.0000, ldb=1, beta=0.0000, ldc=500;
+    sgemm_main(12, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    transa='n', transb='n', m=500, n=18, k=1, lda=500, alpha=1.0000, ldb=1, beta=0.0000, ldc=500;
+    sgemm_main(12, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    transa='n', transb='n', m=500, n=15, k=1, lda=500, alpha=1.0000, ldb=1, beta=0.0000, ldc=500;
+    sgemm_main(12, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    transa='n', transb='n', m=500, n=31, k=1, lda=500, alpha=1.0000, ldb=1, beta=0.0000, ldc=500;
+    sgemm_main(12, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    transa='n', transb='n', m=500, n=24, k=1, lda=500, alpha=1.0000, ldb=1, beta=0.0000, ldc=500;
+    sgemm_main(12, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    transa='n', transb='n', m=500, n=29, k=1, lda=500, alpha=1.0000, ldb=1, beta=0.0000, ldc=500;
+    sgemm_main(12, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    transa='n', transb='n', m=500, n=38, k=1, lda=500, alpha=1.0000, ldb=1, beta=0.0000, ldc=500;
+    sgemm_main(12, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    transa='n', transb='n', m=500, n=33, k=1, lda=500, alpha=1.0000, ldb=1, beta=0.0000, ldc=500;
+    sgemm_main(12, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    transa='n', transb='n', m=500, n=39, k=1, lda=500, alpha=1.0000, ldb=1, beta=0.0000, ldc=500;
+    sgemm_main(12, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    transa='n', transb='n', m=500, n=34, k=1, lda=500, alpha=1.0000, ldb=1, beta=0.0000, ldc=500;
+    sgemm_main(12, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    transa='n', transb='n', m=500, n=28, k=1, lda=500, alpha=1.0000, ldb=1, beta=0.0000, ldc=500;
+    sgemm_main(12, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    transa='n', transb='n', m=500, n=40, k=1, lda=500, alpha=1.0000, ldb=1, beta=0.0000, ldc=500;
+    sgemm_main(12, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    transa='n', transb='n', m=500, n=9, k=1, lda=500, alpha=1.0000, ldb=1, beta=0.0000, ldc=500;
+    sgemm_main(12, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    transa='n', transb='n', m=500, n=27, k=1, lda=500, alpha=1.0000, ldb=1, beta=0.0000, ldc=500;
+    sgemm_main(12, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    transa='n', transb='n', m=500, n=26, k=1, lda=500, alpha=1.0000, ldb=1, beta=0.0000, ldc=500;
+    sgemm_main(12, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    transa='n', transb='n', m=500, n=23, k=1, lda=500, alpha=1.0000, ldb=1, beta=0.0000, ldc=500;
+    sgemm_main(12, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    transa='n', transb='n', m=500, n=17, k=1, lda=500, alpha=1.0000, ldb=1, beta=0.0000, ldc=500;
+    sgemm_main(12, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    transa='n', transb='n', m=500, n=14, k=1, lda=500, alpha=1.0000, ldb=1, beta=0.0000, ldc=500;
+    sgemm_main(12, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    transa='n', transb='n', m=500, n=12, k=1, lda=500, alpha=1.0000, ldb=1, beta=0.0000, ldc=500;
+    sgemm_main(12, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    transa='n', transb='n', m=500, n=16, k=1, lda=500, alpha=1.0000, ldb=1, beta=0.0000, ldc=500;
+    sgemm_main(12, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+    transa='n', transb='n', m=500, n=10, k=1, lda=500, alpha=1.0000, ldb=1, beta=0.0000, ldc=500;
+    sgemm_main(12, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+#endif
     return 1;
 }

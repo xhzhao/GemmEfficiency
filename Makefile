@@ -10,8 +10,8 @@ LOPT = -L$(MKL_DNN_ROOT)/lib/intel64  -mkl -static-intel -static-libgcc -O3 -par
 
 %.o: %.c
 	$(CC) -c -o $@ $< $(COPT)
-test.bin: test.o  gemm1.o gemm3.o gemm4.o gemm5.o gemm11.o
-	$(CC) -o test.bin test.o  gemm1.o gemm3.o gemm4.o gemm5.o gemm11.o $(LOPT) 
+test.bin: test.o  gemm1.o gemm3.o gemm4.o gemm5.o gemm11.o gemm12.o
+	$(CC) -o test.bin test.o  gemm1.o gemm3.o gemm4.o gemm5.o gemm11.o gemm12.o $(LOPT) 
 
 clean:
 	rm -rf *.bin
