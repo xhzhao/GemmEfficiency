@@ -91,7 +91,7 @@ float* matrix_init(int A, int B)
 #pragma omp parallel for
     for(a=0; a < A; a++)
         for(b=0; b < B;b++)
-            p[a*B+b] = (float)(rand() % 1000)/100; 
+            p[a*B+b] = (float)(rand() % 1000);
     return p;
 }
 
