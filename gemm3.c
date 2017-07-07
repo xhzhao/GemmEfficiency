@@ -29,7 +29,7 @@ void sgemm3_opt( char* pTransA, char* pTransB, const int* pM, const int* pN, con
     int m = *pM;
     int n = *pN;
     int k = *pK;
-    float *AT = (float *)mkl_malloc(m*k*sizeof(float), 64);
+    float *AT = (float *)mkl_malloc(m*k*sizeof(float), 2048*1024);
     mkl_somatcopy('r','t', k, m, 1.0, A, m, AT, k);
 #define CB_ITER 16
 #define RA_ITER 16 
@@ -42,11 +42,12 @@ void sgemm3_opt( char* pTransA, char* pTransB, const int* pM, const int* pN, con
   {
     int tid = omp_get_thread_num();
     int block_num = n/TNUM;
- 
+//    int AL = m*4; 
     //for(int ra_block = 0; ra_block < m/RA_BLOCK; ra_block = ra_block+1 ){    
     //printf("tid, %d, block_num %d   ", tid, block_num);
-    for(int cb_t = tid * block_num; cb_t < (tid +1)*block_num; cb_t = cb_t + CB_BLOCK){
-    for(int cb = cb_t; cb < (cb_t + CB_BLOCK); cb = cb + CB_ITER){
+    for(int cb = tid * block_num; cb < (tid +1)*block_num; cb = cb + CB_ITER){
+//    for(int cb_t = tid * block_num; cb_t < (tid +1)*block_num; cb_t = cb_t + CB_BLOCK){
+//    for(int cb = cb_t; cb < (cb_t + CB_BLOCK); cb = cb + CB_ITER){
 //    for(int cb = 0; cb < n; cb = cb + CB_ITER) { //loop for column of b, 35820, 4 AVX512 (64 FP) per iter
         _mm_prefetch((B + 0 * n + cb), _MM_HINT_T0);
         _mm_prefetch((B + 1 * n + cb), _MM_HINT_T0);
@@ -238,7 +239,7 @@ void sgemm3_opt( char* pTransA, char* pTransB, const int* pM, const int* pN, con
                // print_mm512(c0);
         }
     }
-}
+  
 }
    mkl_free(AT);
 //    sgemm3_ref(pTransA, pTransB, pM, pN, pK, pAlpha, A, plda, B, pldb, pBeta, C, pldc);
