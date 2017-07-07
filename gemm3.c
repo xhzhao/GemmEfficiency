@@ -49,7 +49,7 @@ void sgemm3_opt( char* pTransA, char* pTransB, const int* pM, const int* pN, con
 //    for(int cb_t = tid * block_num; cb_t < (tid +1)*block_num; cb_t = cb_t + CB_BLOCK){
 //    for(int cb = cb_t; cb < (cb_t + CB_BLOCK); cb = cb + CB_ITER){
 //    for(int cb = 0; cb < n; cb = cb + CB_ITER) { //loop for column of b, 35820, 4 AVX512 (64 FP) per iter
-        _mm_prefetch((B + 0 * n + cb), _MM_HINT_T0);
+/*        _mm_prefetch((B + 0 * n + cb), _MM_HINT_T0);
         _mm_prefetch((B + 1 * n + cb), _MM_HINT_T0);
         _mm_prefetch((B + 2 * n + cb), _MM_HINT_T0);
         _mm_prefetch((B + 3 * n + cb), _MM_HINT_T0);
@@ -65,7 +65,7 @@ void sgemm3_opt( char* pTransA, char* pTransB, const int* pM, const int* pN, con
         _mm_prefetch((B + 13 * n + cb), _MM_HINT_T0);
         _mm_prefetch((B + 14 * n + cb), _MM_HINT_T0);
         _mm_prefetch((B + 15 * n + cb), _MM_HINT_T0);
-
+*/
         //for(int ra = ra_block *RA_BLOCK; ra < (ra_block + 1)*RA_BLOCK; ra = ra + RA_ITER) {//loop for row of a, 500, 4 line 4 FP per iter
         for(int ra = 0; ra < m; ra = ra + RA_ITER) {//loop for row of a, 500, 4 line 4 FP per iter
              __m512 c0 = _mm512_setzero_ps();
