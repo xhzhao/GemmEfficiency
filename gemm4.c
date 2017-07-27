@@ -36,9 +36,10 @@ sgemm_opt(const uint64_t m, const uint64_t n, const uint64_t p,
        block_id_j = tid;
 
        thread_size_i = m;
-       thread_size_j = 32;
+       thread_size_j = 16;
     } else {
       /* n == 500 */
+
       if (m >= 28) {
         if (m > 32) {
           block_id_i = tid >> 5;
