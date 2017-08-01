@@ -1,533 +1,1329 @@
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/time.h>
-#include <mkl_cblas.h>
-#include "omp.h"
-#include "mkl.h"
-#include "immintrin.h"
-#include<math.h>
+#include <assert.h>
+#include <omp.h>
+#include <mkl.h>
+#include <immintrin.h>
 
-#define THREAD_NUM  8
+typedef unsigned long long int uint64_t;
 
-void print_mm512(__m512 data) {
-  float mem[16];
-  _mm512_store_ps(mem, data);
-
-  int i = 0;
-  printf("\n");
-  for (i = 0; i < 16; ++i) {
-    printf("%f, ", mem[i]);
-  }
-  printf("\n");
+#define matrix_transpose_16x16(                                           \
+r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, ra, rb, rc, rd, re, rf)           \
+{                                                                         \
+    __m512 t0, t1, t2, t3, t4, t5, t6, t7;                                \
+    __m512 t8, t9, ta, tb, tc, td, te, tf;                                \
+                                                                          \
+    t0 = _mm512_unpacklo_ps(r0,r1);                                       \
+    t1 = _mm512_unpackhi_ps(r0,r1);                                       \
+    t2 = _mm512_unpacklo_ps(r2,r3);                                       \
+    t3 = _mm512_unpackhi_ps(r2,r3);                                       \
+    t4 = _mm512_unpacklo_ps(r4,r5);                                       \
+    t5 = _mm512_unpackhi_ps(r4,r5);                                       \
+    t6 = _mm512_unpacklo_ps(r6,r7);                                       \
+    t7 = _mm512_unpackhi_ps(r6,r7);                                       \
+    t8 = _mm512_unpacklo_ps(r8,r9);                                       \
+    t9 = _mm512_unpackhi_ps(r8,r9);                                       \
+    ta = _mm512_unpacklo_ps(ra,rb);                                       \
+    tb = _mm512_unpackhi_ps(ra,rb);                                       \
+    tc = _mm512_unpacklo_ps(rc,rd);                                       \
+    td = _mm512_unpackhi_ps(rc,rd);                                       \
+    te = _mm512_unpacklo_ps(re,rf);                                       \
+    tf = _mm512_unpackhi_ps(re,rf);                                       \
+                                                                          \
+    r0 = (__m512)_mm512_unpacklo_pd((__m512d)t0,(__m512d)t2);             \
+    r1 = (__m512)_mm512_unpackhi_pd((__m512d)t0,(__m512d)t2);             \
+    r2 = (__m512)_mm512_unpacklo_pd((__m512d)t1,(__m512d)t3);             \
+    r3 = (__m512)_mm512_unpackhi_pd((__m512d)t1,(__m512d)t3);             \
+    r4 = (__m512)_mm512_unpacklo_pd((__m512d)t4,(__m512d)t6);             \
+    r5 = (__m512)_mm512_unpackhi_pd((__m512d)t4,(__m512d)t6);             \
+    r6 = (__m512)_mm512_unpacklo_pd((__m512d)t5,(__m512d)t7);             \
+    r7 = (__m512)_mm512_unpackhi_pd((__m512d)t5,(__m512d)t7);             \
+    r8 = (__m512)_mm512_unpacklo_pd((__m512d)t8,(__m512d)ta);             \
+    r9 = (__m512)_mm512_unpackhi_pd((__m512d)t8,(__m512d)ta);             \
+    ra = (__m512)_mm512_unpacklo_pd((__m512d)t9,(__m512d)tb);             \
+    rb = (__m512)_mm512_unpackhi_pd((__m512d)t9,(__m512d)tb);             \
+    rc = (__m512)_mm512_unpacklo_pd((__m512d)tc,(__m512d)te);             \
+    rd = (__m512)_mm512_unpackhi_pd((__m512d)tc,(__m512d)te);             \
+    re = (__m512)_mm512_unpacklo_pd((__m512d)td,(__m512d)tf);             \
+    rf = (__m512)_mm512_unpackhi_pd((__m512d)td,(__m512d)tf);             \
+                                                                          \
+    t0 = _mm512_shuffle_f32x4(r0, r4, 0x88);                              \
+    t1 = _mm512_shuffle_f32x4(r1, r5, 0x88);                              \
+    t2 = _mm512_shuffle_f32x4(r2, r6, 0x88);                              \
+    t3 = _mm512_shuffle_f32x4(r3, r7, 0x88);                              \
+    t4 = _mm512_shuffle_f32x4(r0, r4, 0xdd);                              \
+    t5 = _mm512_shuffle_f32x4(r1, r5, 0xdd);                              \
+    t6 = _mm512_shuffle_f32x4(r2, r6, 0xdd);                              \
+    t7 = _mm512_shuffle_f32x4(r3, r7, 0xdd);                              \
+    t8 = _mm512_shuffle_f32x4(r8, rc, 0x88);                              \
+    t9 = _mm512_shuffle_f32x4(r9, rd, 0x88);                              \
+    ta = _mm512_shuffle_f32x4(ra, re, 0x88);                              \
+    tb = _mm512_shuffle_f32x4(rb, rf, 0x88);                              \
+    tc = _mm512_shuffle_f32x4(r8, rc, 0xdd);                              \
+    td = _mm512_shuffle_f32x4(r9, rd, 0xdd);                              \
+    te = _mm512_shuffle_f32x4(ra, re, 0xdd);                              \
+    tf = _mm512_shuffle_f32x4(rb, rf, 0xdd);                              \
+                                                                          \
+    r0 = _mm512_shuffle_f32x4(t0, t8, 0x88);                              \
+    r1 = _mm512_shuffle_f32x4(t1, t9, 0x88);                              \
+    r2 = _mm512_shuffle_f32x4(t2, ta, 0x88);                              \
+    r3 = _mm512_shuffle_f32x4(t3, tb, 0x88);                              \
+    r4 = _mm512_shuffle_f32x4(t4, tc, 0x88);                              \
+    r5 = _mm512_shuffle_f32x4(t5, td, 0x88);                              \
+    r6 = _mm512_shuffle_f32x4(t6, te, 0x88);                              \
+    r7 = _mm512_shuffle_f32x4(t7, tf, 0x88);                              \
+    r8 = _mm512_shuffle_f32x4(t0, t8, 0xdd);                              \
+    r9 = _mm512_shuffle_f32x4(t1, t9, 0xdd);                              \
+    ra = _mm512_shuffle_f32x4(t2, ta, 0xdd);                              \
+    rb = _mm512_shuffle_f32x4(t3, tb, 0xdd);                              \
+    rc = _mm512_shuffle_f32x4(t4, tc, 0xdd);                              \
+    rd = _mm512_shuffle_f32x4(t5, td, 0xdd);                              \
+    re = _mm512_shuffle_f32x4(t6, te, 0xdd);                              \
+    rf = _mm512_shuffle_f32x4(t7, tf, 0xdd);                              \
 }
 
-void sgemm3_ref( char* pTransA, char* pTransB, const int* pM, const int* pN, const int* pK, const float *pAlpha, const float *pa, const int*plda, const float *pb, const int *pldb, const float *pBeta, float *pc, const int*pldc);
+#define matrix_transpose_8x16(r0, r1, r2, r3, r4, r5, r6, r7)             \
+{                                                                         \
+    __m512 t0, t1, t2, t3, t4, t5, t6, t7;                                \
+                                                                          \
+    t0 = _mm512_unpacklo_ps(r0,r1);                                       \
+    t1 = _mm512_unpackhi_ps(r0,r1);                                       \
+    t2 = _mm512_unpacklo_ps(r2,r3);                                       \
+    t3 = _mm512_unpackhi_ps(r2,r3);                                       \
+    t4 = _mm512_unpacklo_ps(r4,r5);                                       \
+    t5 = _mm512_unpackhi_ps(r4,r5);                                       \
+    t6 = _mm512_unpacklo_ps(r6,r7);                                       \
+    t7 = _mm512_unpackhi_ps(r6,r7);                                       \
+                                                                          \
+    r0 = (__m512)_mm512_unpacklo_pd((__m512d)t0,(__m512d)t2);             \
+    r1 = (__m512)_mm512_unpackhi_pd((__m512d)t0,(__m512d)t2);             \
+    r2 = (__m512)_mm512_unpacklo_pd((__m512d)t1,(__m512d)t3);             \
+    r3 = (__m512)_mm512_unpackhi_pd((__m512d)t1,(__m512d)t3);             \
+    r4 = (__m512)_mm512_unpacklo_pd((__m512d)t4,(__m512d)t6);             \
+    r5 = (__m512)_mm512_unpackhi_pd((__m512d)t4,(__m512d)t6);             \
+    r6 = (__m512)_mm512_unpacklo_pd((__m512d)t5,(__m512d)t7);             \
+    r7 = (__m512)_mm512_unpackhi_pd((__m512d)t5,(__m512d)t7);             \
+                                                                          \
+    t0 = _mm512_shuffle_f32x4(r0, r4, 0x88);                              \
+    t1 = _mm512_shuffle_f32x4(r1, r5, 0x88);                              \
+    t2 = _mm512_shuffle_f32x4(r2, r6, 0x88);                              \
+    t3 = _mm512_shuffle_f32x4(r3, r7, 0x88);                              \
+    t4 = _mm512_shuffle_f32x4(r0, r4, 0xdd);                              \
+    t5 = _mm512_shuffle_f32x4(r1, r5, 0xdd);                              \
+    t6 = _mm512_shuffle_f32x4(r2, r6, 0xdd);                              \
+    t7 = _mm512_shuffle_f32x4(r3, r7, 0xdd);                              \
+                                                                          \
+    r0 = _mm512_shuffle_f32x4(t0, t4, 0x88);                              \
+    r1 = _mm512_shuffle_f32x4(t1, t5, 0x88);                              \
+    r2 = _mm512_shuffle_f32x4(t2, t6, 0x88);                              \
+    r3 = _mm512_shuffle_f32x4(t3, t7, 0x88);                              \
+    r4 = _mm512_shuffle_f32x4(t0, t4, 0xdd);                              \
+    r5 = _mm512_shuffle_f32x4(t1, t5, 0xdd);                              \
+    r6 = _mm512_shuffle_f32x4(t2, t6, 0xdd);                              \
+    r7 = _mm512_shuffle_f32x4(t3, t7, 0xdd);                              \
+}
 
-void sgemm3_opt( char* pTransA, char* pTransB, const int* pM, const int* pN, const int* pK, const float *pAlpha, const float *A, const int*plda, const float *B, const int *pldb, const float *pBeta, float *C, const int*pldc)
+#define matrix_transpose_4x16(r0, r1, r2, r3)                             \
+{                                                                         \
+    __m512 t0, t1, t2, t3;                                                \
+                                                                          \
+    t0 = _mm512_unpacklo_ps(r0,r1);                                       \
+    t1 = _mm512_unpackhi_ps(r0,r1);                                       \
+    t2 = _mm512_unpacklo_ps(r2,r3);                                       \
+    t3 = _mm512_unpackhi_ps(r2,r3);                                       \
+                                                                          \
+    r0 = (__m512)_mm512_unpacklo_pd((__m512d)t0,(__m512d)t2);             \
+    r1 = (__m512)_mm512_unpackhi_pd((__m512d)t0,(__m512d)t2);             \
+    r2 = (__m512)_mm512_unpacklo_pd((__m512d)t1,(__m512d)t3);             \
+    r3 = (__m512)_mm512_unpackhi_pd((__m512d)t1,(__m512d)t3);             \
+                                                                          \
+    t0 = _mm512_shuffle_f32x4(r0, r1, 0x88);                              \
+    t1 = _mm512_shuffle_f32x4(r2, r3, 0x88);                              \
+    t2 = _mm512_shuffle_f32x4(r0, r1, 0xdd);                              \
+    t3 = _mm512_shuffle_f32x4(r2, r3, 0xdd);                              \
+                                                                          \
+    r0 = _mm512_shuffle_f32x4(t0, t1, 0x88);                              \
+    r1 = _mm512_shuffle_f32x4(t2, t3, 0x88);                              \
+    r2 = _mm512_shuffle_f32x4(t0, t1, 0xdd);                              \
+    r3 = _mm512_shuffle_f32x4(t2, t3, 0xdd);                              \
+                                                                          \
+}
+
+static inline void
+copy_matrix_a(float * at, float * a,
+              uint64_t m, uint64_t p)
 {
-    int m = *pM;
-    int n = *pN;
-    int k = *pK;
-    float *AT = (float *)mkl_malloc(m*k*sizeof(float), 2048*1024);
-    mkl_somatcopy('r','t', k, m, 1.0, A, m, AT, k);
-#define CB_ITER 16
-#define RA_ITER 16 
-#define CA_ITER 16
-#define AL 512*4 //(length of A)
-#define RA_BLOCK 64
-#define CB_BLOCK 64
-#define TNUM (64)
-#pragma omp parallel num_threads(TNUM)
-  {
-    int tid = omp_get_thread_num();
-    int block_num = n/TNUM;
-//    int AL = m*4; 
-    //for(int ra_block = 0; ra_block < m/RA_BLOCK; ra_block = ra_block+1 ){    
-    //printf("tid, %d, block_num %d   ", tid, block_num);
-    for(int cb = tid * block_num; cb < (tid +1)*block_num; cb = cb + CB_ITER){
-//    for(int cb_t = tid * block_num; cb_t < (tid +1)*block_num; cb_t = cb_t + CB_BLOCK){
-//    for(int cb = cb_t; cb < (cb_t + CB_BLOCK); cb = cb + CB_ITER){
-//    for(int cb = 0; cb < n; cb = cb + CB_ITER) { //loop for column of b, 35820, 4 AVX512 (64 FP) per iter
-/*        _mm_prefetch((B + 0 * n + cb), _MM_HINT_T0);
-        _mm_prefetch((B + 1 * n + cb), _MM_HINT_T0);
-        _mm_prefetch((B + 2 * n + cb), _MM_HINT_T0);
-        _mm_prefetch((B + 3 * n + cb), _MM_HINT_T0);
-        _mm_prefetch((B + 4 * n + cb), _MM_HINT_T0);
-        _mm_prefetch((B + 5 * n + cb), _MM_HINT_T0);
-        _mm_prefetch((B + 6 * n + cb), _MM_HINT_T0);
-        _mm_prefetch((B + 7 * n + cb), _MM_HINT_T0);
-        _mm_prefetch((B + 8 * n + cb), _MM_HINT_T0);
-        _mm_prefetch((B + 9 * n + cb), _MM_HINT_T0);
-        _mm_prefetch((B + 10 * n + cb), _MM_HINT_T0);
-        _mm_prefetch((B + 11 * n + cb), _MM_HINT_T0);
-        _mm_prefetch((B + 12 * n + cb), _MM_HINT_T0);
-        _mm_prefetch((B + 13 * n + cb), _MM_HINT_T0);
-        _mm_prefetch((B + 14 * n + cb), _MM_HINT_T0);
-        _mm_prefetch((B + 15 * n + cb), _MM_HINT_T0);
-*/
-        //for(int ra = ra_block *RA_BLOCK; ra < (ra_block + 1)*RA_BLOCK; ra = ra + RA_ITER) {//loop for row of a, 500, 4 line 4 FP per iter
-        for(int ra = 0; ra < m; ra = ra + RA_ITER) {//loop for row of a, 500, 4 line 4 FP per iter
-             __m512 c0 = _mm512_setzero_ps();
-             __m512 c1 = _mm512_setzero_ps();
-             __m512 c2 = _mm512_setzero_ps();
-             __m512 c3 = _mm512_setzero_ps();
+  __mmask16 mask = 0xffff;
+  __m512 zero = _mm512_setzero_ps();
+  float *at_t = NULL;
+  uint64_t i = 0;
 
-             __m512 c4 = _mm512_setzero_ps();
-             __m512 c5 = _mm512_setzero_ps();
-             __m512 c6 = _mm512_setzero_ps();
-             __m512 c7 = _mm512_setzero_ps();
-
-             __m512 c8 = _mm512_setzero_ps();
-             __m512 c9 = _mm512_setzero_ps();
-             __m512 c10 = _mm512_setzero_ps();
-             __m512 c11 = _mm512_setzero_ps();
-
-             __m512 c12 = _mm512_setzero_ps();
-             __m512 c13 = _mm512_setzero_ps();
-             __m512 c14 = _mm512_setzero_ps();
-             __m512 c15 = _mm512_setzero_ps();
-            
-            for(int ca = 0; ca < k; ca = ca + CA_ITER) {      //ca = rb = 64,   k
-                 float *abase = (float *)(AT + ra * k + ca);  //fetch ?
-                 float *bbase = (float *)(B + ca * n + cb);            //fetch 4 AVX512
-
-                 __m512 b00 = _mm512_load_ps(bbase);
-                 __m512 b10 = _mm512_load_ps(bbase + n);
-                 __m512 b20 = _mm512_load_ps(bbase + n*2);
-                 __m512 b30 = _mm512_load_ps(bbase + n*3);
-
-                 __m512 b40 = _mm512_load_ps(bbase + n*4);
-                 __m512 b50 = _mm512_load_ps(bbase + n*5);
-                 __m512 b60 = _mm512_load_ps(bbase + n*6);
-                 __m512 b70 = _mm512_load_ps(bbase + n*7);
-
-                 __m512 b80 = _mm512_load_ps(bbase + n*8);
-                 __m512 b90 = _mm512_load_ps(bbase + n*9);
-                 __m512 ba0 = _mm512_load_ps(bbase + n*10);
-                 __m512 bb0 = _mm512_load_ps(bbase + n*11);
-
-                 __m512 bc0 = _mm512_load_ps(bbase + n*12);
-                 __m512 bd0 = _mm512_load_ps(bbase + n*13);
-                 __m512 be0 = _mm512_load_ps(bbase + n*14);
-                 __m512 bf0 = _mm512_load_ps(bbase + n*15);
-
-                __m128 *a00 = (__m128 *)(abase);
-                __m128 *a10 = (__m128 *)(abase + k);
-                __m128 *a20 = (__m128 *)(abase + k*2);
-                __m128 *a30 = (__m128 *)(abase + k*3);
-
-                __m128 *a40 = (__m128 *)(abase + k*4);
-                __m128 *a50 = (__m128 *)(abase + k*5);
-                __m128 *a60 = (__m128 *)(abase + k*6);
-                __m128 *a70 = (__m128 *)(abase + k*7);
-
-                __m128 *a80 = (__m128 *)(abase + k*8);
-                __m128 *a90 = (__m128 *)(abase + k*9);
-                __m128 *aa0 = (__m128 *)(abase + k*10);
-                __m128 *ab0 = (__m128 *)(abase + k*11);
-
-                __m128 *ac0 = (__m128 *)(abase + k*12);
-                __m128 *ad0 = (__m128 *)(abase + k*13);
-                __m128 *ae0 = (__m128 *)(abase + k*14);
-                __m128 *af0 = (__m128 *)(abase + k*15);
-
-                c0 = _mm512_4fmadd_ps(c0, b00, b10, b20, b30, a00);
-                c1 = _mm512_4fmadd_ps(c1, b00, b10, b20, b30, a10);
-                c2 = _mm512_4fmadd_ps(c2, b00, b10, b20, b30, a20);
-                c3 = _mm512_4fmadd_ps(c3, b00, b10, b20, b30, a30);
-
-
-                c4 = _mm512_4fmadd_ps(c4, b00, b10, b20, b30, a40);
-                c5 = _mm512_4fmadd_ps(c5, b00, b10, b20, b30, a50);
-                c6 = _mm512_4fmadd_ps(c6, b00, b10, b20, b30, a60);
-                c7 = _mm512_4fmadd_ps(c7, b00, b10, b20, b30, a70);
-
-                c8 = _mm512_4fmadd_ps(c8, b00, b10, b20, b30, a80);
-                c9 = _mm512_4fmadd_ps(c9, b00, b10, b20, b30, a90);
-                c10 = _mm512_4fmadd_ps(c10, b00, b10, b20, b30, aa0);
-                c11 = _mm512_4fmadd_ps(c11, b00, b10, b20, b30, ab0);
-
-                c12 = _mm512_4fmadd_ps(c12, b00, b10, b20, b30, ac0);
-                c13 = _mm512_4fmadd_ps(c13, b00, b10, b20, b30, ad0);
-                c14 = _mm512_4fmadd_ps(c14, b00, b10, b20, b30, ae0);
-                c15 = _mm512_4fmadd_ps(c15, b00, b10, b20, b30, af0);
-
-
-                c0 = _mm512_4fmadd_ps(c0, b40, b50, b60, b70, a00+1);
-                c1 = _mm512_4fmadd_ps(c1, b40, b50, b60, b70, a10+1);
-                c2 = _mm512_4fmadd_ps(c2, b40, b50, b60, b70, a20+1);
-                c3 = _mm512_4fmadd_ps(c3, b40, b50, b60, b70, a30+1);
-                c4 = _mm512_4fmadd_ps(c4, b40, b50, b60, b70, a40+1);
-                c5 = _mm512_4fmadd_ps(c5, b40, b50, b60, b70, a50+1);
-                c6 = _mm512_4fmadd_ps(c6, b40, b50, b60, b70, a60+1);
-                c7 = _mm512_4fmadd_ps(c7, b40, b50, b60, b70, a70+1);
-                c8 = _mm512_4fmadd_ps(c8, b40, b50, b60, b70, a80+1);
-                c9 = _mm512_4fmadd_ps(c9, b40, b50, b60, b70, a90+1);
-                c10 = _mm512_4fmadd_ps(c10, b40, b50, b60, b70, aa0+1);
-                c11 = _mm512_4fmadd_ps(c11, b40, b50, b60, b70, ab0+1);
-                c12 = _mm512_4fmadd_ps(c12, b40, b50, b60, b70, ac0+1);
-                c13 = _mm512_4fmadd_ps(c13, b40, b50, b60, b70, ad0+1);
-                c14 = _mm512_4fmadd_ps(c14, b40, b50, b60, b70, ae0+1);
-                c15 = _mm512_4fmadd_ps(c15, b40, b50, b60, b70, af0+1);
-
-
-                c0 = _mm512_4fmadd_ps(c0, b80, b90, ba0, bb0, a00+2);
-                c1 = _mm512_4fmadd_ps(c1, b80, b90, ba0, bb0, a10+2);
-                c2 = _mm512_4fmadd_ps(c2, b80, b90, ba0, bb0, a20+2);
-                c3 = _mm512_4fmadd_ps(c3, b80, b90, ba0, bb0, a30+2);
-                c4 = _mm512_4fmadd_ps(c4, b80, b90, ba0, bb0, a40+2);
-                c5 = _mm512_4fmadd_ps(c5, b80, b90, ba0, bb0, a50+2);
-                c6 = _mm512_4fmadd_ps(c6, b80, b90, ba0, bb0, a60+2);
-                c7 = _mm512_4fmadd_ps(c7, b80, b90, ba0, bb0, a70+2);
-                c8 = _mm512_4fmadd_ps(c8, b80, b90, ba0, bb0, a80+2);
-                c9 = _mm512_4fmadd_ps(c9, b80, b90, ba0, bb0, a90+2);
-                c10 = _mm512_4fmadd_ps(c10, b80, b90, ba0, bb0, aa0+2);
-                c11 = _mm512_4fmadd_ps(c11, b80, b90, ba0, bb0, ab0+2);
-                c12 = _mm512_4fmadd_ps(c12, b80, b90, ba0, bb0, ac0+2);
-                c13 = _mm512_4fmadd_ps(c13, b80, b90, ba0, bb0, ad0+2);
-                c14 = _mm512_4fmadd_ps(c14, b80, b90, ba0, bb0, ae0+2);
-                c15 = _mm512_4fmadd_ps(c15, b80, b90, ba0, bb0, af0+2);
-
-
-
-                c0 = _mm512_4fmadd_ps(c0, bc0, bd0, be0, bf0, a00+3);
-                c1 = _mm512_4fmadd_ps(c1, bc0, bd0, be0, bf0, a10+3);
-                c2 = _mm512_4fmadd_ps(c2, bc0, bd0, be0, bf0, a20+3);
-                c3 = _mm512_4fmadd_ps(c3, bc0, bd0, be0, bf0, a30+3);
-                c4 = _mm512_4fmadd_ps(c4, bc0, bd0, be0, bf0, a40+3);
-                c5 = _mm512_4fmadd_ps(c5, bc0, bd0, be0, bf0, a50+3);
-                c6 = _mm512_4fmadd_ps(c6, bc0, bd0, be0, bf0, a60+3);
-                c7 = _mm512_4fmadd_ps(c7, bc0, bd0, be0, bf0, a70+3);
-                c8 = _mm512_4fmadd_ps(c8, bc0, bd0, be0, bf0, a80+3);
-                c9 = _mm512_4fmadd_ps(c9, bc0, bd0, be0, bf0, a90+3);
-                c10 = _mm512_4fmadd_ps(c10, bc0, bd0, be0, bf0, aa0+3);
-                c11 = _mm512_4fmadd_ps(c11, bc0, bd0, be0, bf0, ab0+3);
-                c12 = _mm512_4fmadd_ps(c12, bc0, bd0, be0, bf0, ac0+3);
-                c13 = _mm512_4fmadd_ps(c13, bc0, bd0, be0, bf0, ad0+3);
-                c14 = _mm512_4fmadd_ps(c14, bc0, bd0, be0, bf0, ae0+3);
-                c15 = _mm512_4fmadd_ps(c15, bc0, bd0, be0, bf0, af0+3);
-            }
-           
-            float *cbase = C + cb*m + ra;
-             __m512i index_c0 = _mm512_set_epi32(15*AL,14*AL, 13*AL, 12*AL, 11*AL,10*AL,9*AL,8*AL,7*AL
-                                                 ,6*AL, 5*AL,4*AL,3*AL,2*AL,1*AL,0);
-#if 1 
-            _mm512_i32scatter_ps((void*)cbase,index_c0,c0,1);
-            _mm512_i32scatter_ps((void*)(cbase + 1),index_c0,c1,1);
-            _mm512_i32scatter_ps((void*)(cbase + 2),index_c0,c2,1);
-            _mm512_i32scatter_ps((void*)(cbase + 3),index_c0,c3,1);
-
-            _mm512_i32scatter_ps((void*)(cbase + 4),index_c0,c4,1);
-            _mm512_i32scatter_ps((void*)(cbase + 5),index_c0,c5,1);
-            _mm512_i32scatter_ps((void*)(cbase + 6),index_c0,c6,1);
-            _mm512_i32scatter_ps((void*)(cbase + 7),index_c0,c7,1);
-
-
-            _mm512_i32scatter_ps((void*)(cbase + 8),index_c0,c8,1);
-            _mm512_i32scatter_ps((void*)(cbase + 9),index_c0,c9,1);
-            _mm512_i32scatter_ps((void*)(cbase + 10),index_c0,c10,1);
-            _mm512_i32scatter_ps((void*)(cbase + 11),index_c0,c11,1);
-
-             _mm512_i32scatter_ps((void*)(cbase + 12),index_c0,c12,1);
-            _mm512_i32scatter_ps((void*)(cbase + 13),index_c0,c13,1);
-            _mm512_i32scatter_ps((void*)(cbase + 14),index_c0,c14,1);
-            _mm512_i32scatter_ps((void*)(cbase + 15),index_c0,c15,1);
-#endif
-
-           // if(cb == 0 && ca == 0)
-               // print_mm512(c0);
-        }
+  for (; i < m; i += 16) {
+    uint64_t k = 0;
+    if ((i + 16) >= m) {
+      mask = (1u << (m - i)) - 1;
     }
-  
-}
-   mkl_free(AT);
-//    sgemm3_ref(pTransA, pTransB, pM, pN, pK, pAlpha, A, plda, B, pldb, pBeta, C, pldc);
-}
-#if 1
-void sgemm3_ref( char* pTransA, char* pTransB, const int* pM, const int* pN, const int* pK, const float *pAlpha, const float *pa, const int*plda, const float *pb, const int *pldb, const float *pBeta, float *pc, const int*pldc);
-void sgemm3_opt_no_transpose( char* pTransA, char* pTransB, const int* pM, const int* pN, const int* pK, const float *pAlpha, const float *A, const int*plda, const float *B, const int *pldb, const float *pBeta, float *C, const int*pldc)
-{
-    int m = *pM;
-    int n = *pN;
-    int k = *pK;
-#define CB_ITER 32
-#define CA_ITER 16
-#define RA_ITER 4
-#define AL 512*4 //(length of A)
+    at_t = at;
+    for (k = 0; k < p; k += 4) {
+      if (k + 4 > p) { break; }
+      __m512 a_0_f_i_0_k = _mm512_maskz_load_ps(mask, a + (k + 0x0) * m);
+      __m512 a_0_f_i_1_k = _mm512_maskz_load_ps(mask, a + (k + 0x1) * m);
+      __m512 a_0_f_i_2_k = _mm512_maskz_load_ps(mask, a + (k + 0x2) * m);
+      __m512 a_0_f_i_3_k = _mm512_maskz_load_ps(mask, a + (k + 0x3) * m);
 
-#define TNUM (64)
-#pragma omp parallel num_threads(TNUM)
-  {
-    int tid = omp_get_thread_num();
-    __m128 *buffer = (__m128 *)mkl_malloc( 4*64, 64 );
-    float *buffer_fp = (float *)buffer;
-    int block_num = n/TNUM;
-    //printf("tid, %d, block_num %d   ", tid, block_num);
-    for(int cb = tid * block_num; cb < (tid +1)*block_num; cb = cb + CB_ITER){
-//    for(int cb = 0; cb < n; cb = cb + CB_ITER) { //loop for row of b, 35820, 4 AVX512 (64 FP) per iter
+      matrix_transpose_4x16(a_0_f_i_0_k, a_0_f_i_1_k, a_0_f_i_2_k, a_0_f_i_3_k);
 
-        for(int ca = 0; ca < m; ca = ca + CA_ITER) {//loop for row of a, 500, 4 FP per iter
-             __m512 c0 = _mm512_setzero_ps();
-             __m512 c1 = _mm512_setzero_ps();
-             __m512 c2 = _mm512_setzero_ps();
-             __m512 c3 = _mm512_setzero_ps();
-
-             __m512 c4 = _mm512_setzero_ps();
-             __m512 c5 = _mm512_setzero_ps();
-             __m512 c6 = _mm512_setzero_ps();
-             __m512 c7 = _mm512_setzero_ps();
-
-             __m512 c8 = _mm512_setzero_ps();
-             __m512 c9 = _mm512_setzero_ps();
-             __m512 c10 = _mm512_setzero_ps();
-             __m512 c11 = _mm512_setzero_ps();
-
-             __m512 c12 = _mm512_setzero_ps();
-             __m512 c13 = _mm512_setzero_ps();
-             __m512 c14 = _mm512_setzero_ps();
-             __m512 c15 = _mm512_setzero_ps();
-
-             __m512 c16 = _mm512_setzero_ps();
-             __m512 c17 = _mm512_setzero_ps();
-             __m512 c18 = _mm512_setzero_ps();
-             __m512 c19 = _mm512_setzero_ps();
-
-             __m512 c20 = _mm512_setzero_ps();
-             __m512 c21 = _mm512_setzero_ps();
-             __m512 c22 = _mm512_setzero_ps();
-             __m512 c23 = _mm512_setzero_ps();
-
-             __m512 c24 = _mm512_setzero_ps();
-             __m512 c25 = _mm512_setzero_ps();
-             __m512 c26 = _mm512_setzero_ps();
-             __m512 c27 = _mm512_setzero_ps();
-
-             __m512 c28 = _mm512_setzero_ps();
-             __m512 c29 = _mm512_setzero_ps();
-             __m512 c30 = _mm512_setzero_ps();
-             __m512 c31 = _mm512_setzero_ps();
-             
-            for(int ra = 0; ra < k; ra = ra + RA_ITER) {      //ra = rb = 64,   k
-                 float *abase = (float *)(A + ra * m + ca);  //fetch ?
-                 float *bbase = (float *)(B + ra * n + cb);            //fetch 4 AVX512
-                 float *bbase2 = (float *)(B + ra * n + cb + 16);            //fetch 4 AVX512
-                 __m512 a0 = _mm512_load_ps(abase);
-                 __m512 a1 = _mm512_load_ps(abase + m);
-                 __m512 a2 = _mm512_load_ps(abase + m*2);
-                 __m512 a3 = _mm512_load_ps(abase + m*3);
-                 
-                 __m512i index_a0 = _mm512_set_epi32(60,56,52, 48, 44, 40, 36, 32, 28, 24, 20, 16, 12, 8, 4, 0);
-                
-                 _mm512_i32scatter_ps((void*)buffer_fp,index_a0,a0,4);
-                 _mm512_i32scatter_ps((void*)(buffer_fp +1),index_a0,a1,4);
-                 _mm512_i32scatter_ps((void*)(buffer_fp + 2),index_a0,a2,4);
-                 _mm512_i32scatter_ps((void*)(buffer_fp + 3),index_a0,a3,4);
-
-                 __m512 b00 = _mm512_load_ps(bbase);
-                 __m512 b10 = _mm512_load_ps(bbase + n);
-                 __m512 b20 = _mm512_load_ps(bbase + n*2);
-                 __m512 b30 = _mm512_load_ps(bbase + n*3);
-
-                 __m512 b01 = _mm512_load_ps(bbase2);
-                 __m512 b11 = _mm512_load_ps(bbase2 + n);
-                 __m512 b21 = _mm512_load_ps(bbase2 + n*2);
-                 __m512 b31 = _mm512_load_ps(bbase2 + n*3);
-                 
-                c0 = _mm512_4fmadd_ps(c0, b00, b10, b20, b30, buffer); 
-                c1 = _mm512_4fmadd_ps(c1, b00, b10, b20, b30, buffer+1); 
-                c2 = _mm512_4fmadd_ps(c2, b00, b10, b20, b30, buffer+2); 
-                c3 = _mm512_4fmadd_ps(c3, b00, b10, b20, b30, buffer+3); 
-
-                c4 = _mm512_4fmadd_ps(c4, b00, b10, b20, b30, buffer + 4); 
-                c5 = _mm512_4fmadd_ps(c5, b00, b10, b20, b30, buffer+5); 
-                c6 = _mm512_4fmadd_ps(c6, b00, b10, b20, b30, buffer+6); 
-                c7 = _mm512_4fmadd_ps(c7, b00, b10, b20, b30, buffer+7); 
-
-                c8 = _mm512_4fmadd_ps(c8, b00, b10, b20, b30, buffer + 8); 
-                c9 = _mm512_4fmadd_ps(c9, b00, b10, b20, b30, buffer+9); 
-                c10 = _mm512_4fmadd_ps(c10, b00, b10, b20, b30, buffer+10); 
-                c11 = _mm512_4fmadd_ps(c11, b00, b10, b20, b30, buffer+11); 
-
-                c12 = _mm512_4fmadd_ps(c12, b00, b10, b20, b30, buffer +12); 
-                c13 = _mm512_4fmadd_ps(c13, b00, b10, b20, b30, buffer+13); 
-                c14 = _mm512_4fmadd_ps(c14, b00, b10, b20, b30, buffer+14); 
-                c15 = _mm512_4fmadd_ps(c15, b00, b10, b20, b30, buffer+15); 
-
-                c16 = _mm512_4fmadd_ps(c16, b01, b11, b21, b31, buffer); 
-                c17 = _mm512_4fmadd_ps(c17, b01, b11, b21, b31, buffer+1); 
-                c18 = _mm512_4fmadd_ps(c18, b01, b11, b21, b31, buffer+2); 
-                c19 = _mm512_4fmadd_ps(c19, b01, b11, b21, b31, buffer + 3);
-                
-                c20 = _mm512_4fmadd_ps(c20, b01, b11, b21, b31, buffer+4); 
-                c21 = _mm512_4fmadd_ps(c21, b01, b11, b21, b31, buffer+5); 
-                c22 = _mm512_4fmadd_ps(c22, b01, b11, b21, b31, buffer+6); 
-                c23 = _mm512_4fmadd_ps(c23, b01, b11, b21, b31, buffer + 7);
-                
-                c24 = _mm512_4fmadd_ps(c24, b01, b11, b21, b31, buffer+8); 
-                c25 = _mm512_4fmadd_ps(c25, b01, b11, b21, b31, buffer+9); 
-                c26 = _mm512_4fmadd_ps(c26, b01, b11, b21, b31, buffer+10); 
-                c27 = _mm512_4fmadd_ps(c27, b01, b11, b21, b31, buffer +11);
-                
-                c28 = _mm512_4fmadd_ps(c28, b01, b11, b21, b31, buffer+12); 
-                c29 = _mm512_4fmadd_ps(c29, b01, b11, b21, b31, buffer+13); 
-                c30 = _mm512_4fmadd_ps(c30, b01, b11, b21, b31, buffer+14); 
-                c31 = _mm512_4fmadd_ps(c31, b01, b11, b21, b31, buffer+15); 
-            }
-           
-            float *cbase = C + cb*m + ca;
-             __m512i index_c0 = _mm512_set_epi32(15*AL,14*AL, 13*AL, 12*AL, 11*AL,10*AL,9*AL,8*AL,7*AL
-                                                                             ,6*AL, 5*AL,4*AL,3*AL,2*AL,1*AL,0);
-
-            _mm512_i32scatter_ps((void*)cbase,index_c0,c0,1);
-            _mm512_i32scatter_ps((void*)(cbase + 1),index_c0,c1,1);
-            _mm512_i32scatter_ps((void*)(cbase + 2),index_c0,c2,1);
-            _mm512_i32scatter_ps((void*)(cbase + 3),index_c0,c3,1);
-
-             _mm512_i32scatter_ps((void*)(cbase + 4),index_c0,c4,1);
-            _mm512_i32scatter_ps((void*)(cbase + 5),index_c0,c5,1);
-            _mm512_i32scatter_ps((void*)(cbase + 6),index_c0,c6,1);
-            _mm512_i32scatter_ps((void*)(cbase + 7),index_c0,c7,1);
-
-            _mm512_i32scatter_ps((void*)(cbase + 8),index_c0,c8,1);
-            _mm512_i32scatter_ps((void*)(cbase + 9),index_c0,c9,1);
-            _mm512_i32scatter_ps((void*)(cbase + 10),index_c0,c10,1);
-            _mm512_i32scatter_ps((void*)(cbase + 11),index_c0,c11,1);
-
-             _mm512_i32scatter_ps((void*)(cbase + 12),index_c0,c12,1);
-            _mm512_i32scatter_ps((void*)(cbase + 13),index_c0,c13,1);
-            _mm512_i32scatter_ps((void*)(cbase + 14),index_c0,c14,1);
-            _mm512_i32scatter_ps((void*)(cbase + 15),index_c0,c15,1);
-
-            float *cbase2 = C + (cb + 16)*m + ca;
-             _mm512_i32scatter_ps((void*)cbase2,index_c0,c16,1);
-            _mm512_i32scatter_ps((void*)(cbase2 + 1),index_c0,c17,1);
-            _mm512_i32scatter_ps((void*)(cbase2 + 2),index_c0,c18,1);
-            _mm512_i32scatter_ps((void*)(cbase2 + 3),index_c0,c19,1);
-
-             _mm512_i32scatter_ps((void*)(cbase2 + 4),index_c0,c20,1);
-            _mm512_i32scatter_ps((void*)(cbase2 + 5),index_c0,c21,1);
-            _mm512_i32scatter_ps((void*)(cbase2 + 6),index_c0,c22,1);
-            _mm512_i32scatter_ps((void*)(cbase2 + 7),index_c0,c23,1);
-
-            _mm512_i32scatter_ps((void*)(cbase2 + 8),index_c0,c24,1);
-            _mm512_i32scatter_ps((void*)(cbase2 + 9),index_c0,c25,1);
-            _mm512_i32scatter_ps((void*)(cbase2 + 10),index_c0,c26,1);
-            _mm512_i32scatter_ps((void*)(cbase2 + 11),index_c0,c27,1);
-
-            _mm512_i32scatter_ps((void*)(cbase2 + 12),index_c0,c28,1);
-            _mm512_i32scatter_ps((void*)(cbase2 + 13),index_c0,c29,1);
-            _mm512_i32scatter_ps((void*)(cbase2 + 14),index_c0,c30,1);
-            _mm512_i32scatter_ps((void*)(cbase2 + 15),index_c0,c31,1);
-
-           // if(cb == 0 && ca == 0)
-               // print_mm512(c0);
-        }
-
-    }
-    mkl_free(buffer_fp);
-}
-//    sgemm3_ref(pTransA, pTransB, pM, pN, pK, pAlpha, A, plda, B, pldb, pBeta, C, pldc);
-}
-#endif
-
-#if 0
-void sgemm3_opt( char* pTransA, char* pTransB, const int* pM, const int* pN, const int* pK, const float *pAlpha, const float *A, const int*plda, const float *B, const int *pldb, const float *pBeta, float *C, const int*pldc)
-{
-    int m = *pM;
-    int n = *pN;
-    int k = *pK;
-    for(int cb = 0; cb < n; cb = cb + 64) { //loop for row of b, 35820, 4 AVX512 (64 FP) per iter
-
-        for(int ca = 0; ca < m; ca = ca + 64) {//loop for row of a, 500, 4 FP per iter
-             __m512 c0 = _mm512_setzero_ps();
-             __m512 c1 = _mm512_setzero_ps();
-             __m512 c2 = _mm512_setzero_ps();
-             __m512 c3 = _mm512_setzero_ps();
-            for(int ra = 0; ra < k; ra = ra++) {      //64,   k
-                 float *abase = (float *)(A + ra * m + ca);  //fetch 4 AVX512
-                 float *bbase = (float *)(B + ra * n + cb);            //fetch 4 AVX512
-
-                 __m512 a00 = _mm512_load_ps(abase);
-                 __m512 b00 = _mm512_load_ps(bbase);
-                 c0 = _mm512_fmadd_ps(a00, b00, c0);           
-                 
-                 __m512 a01 = _mm512_load_ps(abase + 16);
-                 __m512 b01 = _mm512_load_ps(bbase + 16);
-                 c1 = _mm512_fmadd_ps(a01, b01, c1);    
-                 
-                 __m512 a02 = _mm512_load_ps(abase + 32);
-                 __m512 b02 = _mm512_load_ps(bbase + 32);
-                 c2 = _mm512_fmadd_ps(a02, b02, c2);   
-                 
-                 __m512 a03 = _mm512_load_ps(abase + 48);
-                 __m512 b03 = _mm512_load_ps(bbase + 48);
-                 c3 = _mm512_fmadd_ps(a03, b03, c3);
-    
-            }
-            float *cbase1 = C + cb*m + ca;
-            float *cbase2 = C + (cb + 16)*m + ca + 16;
-            float *cbase3 = C + (cb + 32)*m + ca + 32;
-            float *cbase4 = C + (cb + 48)*m + ca + 48;
-            __m512i index = _mm512_set1_ps(m);
-            #if 0
-            _mm512_i32scatter_ps((void*)cbase1,index,c0,1);
-            _mm512_i32scatter_ps((void*)cbase2,index,c1,1);
-            _mm512_i32scatter_ps((void*)cbase3,index,c2,1);
-            _mm512_i32scatter_ps((void*)cbase4,index,c3,1);
-            #endif
-            if(cb == 0 && ca == 0)
-                print_mm512(c0);
-            //__mm512_store_ps(C + ram* n + cbn, c0_15);
-        }
-
-    }
-
-    sgemm3_ref(pTransA, pTransB, pM, pN, pK, pAlpha, A, plda, B, pldb, pBeta, C, pldc);
-}
-#endif
-
-
-#if 1
-void sgemm3_ref( char* pTransA, char* pTransB, const int* pM, const int* pN, const int* pK, const float *pAlpha, const float *pa, const int*plda, const float *pb, const int *pldb, const float *pBeta, float *pc, const int*pldc)
-{
-    printf("sgemm3_opt start \n");
-
-  const int M = *pM;
-  const int N = *pN;
-  const int K = *pK;
-  const int lda = *plda;
-  const int ldb = *pldb;
-  const int ldc = *pldc;
-  float alpha = *pAlpha;
-  float beta = *pBeta;
-  const int row_per_thread = M/THREAD_NUM;
-  int i,j,l;
-
-    float * a_ = pa;
-    for(i = 0; i < M; i++)
-      {
-        float *b_ = pb;
-        for(j = 0; j < N; j++)
-        {
-          float sum = 0;
-          for(l = 0; l < K; l =l +4) {
-                 sum += a_[l*lda]*b_[l*ldb];
-                 sum += a_[(l +1)*lda]*b_[(l+1)*ldb];
-                 sum += a_[(l + 2)*lda]*b_[(l+2)*ldb];
-                 sum += a_[(l + 3)*lda]*b_[(l+3)*ldb];
-                 //if(i=0 && j==0)
-                  //  printf("sum , %f , " , sum);
-            }
-          b_++;
-          if (beta == 0)
-            pc[j*ldc+i] = alpha*sum;
-          else
-            pc[j*ldc+i] = beta*pc[j*ldc+i]+alpha*sum;
-         // if(i==0 && j ==0)
-          //    printf("[%d, %d]: %f,  ", i, j, pc[j*ldc+i]);               
-        }
-        a_++;
+      if (mask == 0xffff) {
+        _mm512_store_ps(at + 0x00, a_0_f_i_0_k);
+        _mm512_store_ps(at + 0x10, a_0_f_i_1_k);
+        _mm512_store_ps(at + 0x20, a_0_f_i_2_k);
+        _mm512_store_ps(at + 0x30, a_0_f_i_3_k);
+        at += 0x40;
+      } else {
+        if((mask & 0x000f) == 0x000f) { _mm512_store_ps(at + 0x00, a_0_f_i_0_k); at_t += 0x10; }
+        if((mask & 0x00f0) == 0x00f0) { _mm512_store_ps(at + 0x10, a_0_f_i_1_k); at_t += 0x10; }
+        if((mask & 0x0f00) == 0x0f00) { _mm512_store_ps(at + 0x20, a_0_f_i_2_k); at_t += 0x10; }
+        if((mask & 0xf000) == 0xf000) { _mm512_store_ps(at + 0x30, a_0_f_i_3_k); at_t += 0x10; }
+        at = at_t;
       }
+    }
+
+    if (k < p) {
+      __m512 a_0_f_i_0_k = _mm512_setzero_ps();
+      __m512 a_0_f_i_1_k = _mm512_setzero_ps();
+      __m512 a_0_f_i_2_k = _mm512_setzero_ps();
+      __m512 a_0_f_i_3_k = _mm512_setzero_ps();
+
+      a_0_f_i_0_k = _mm512_maskz_load_ps(mask, a + (k + 0x0) * m);
+      if ((k + 1) < p) { a_0_f_i_1_k = _mm512_maskz_load_ps(mask, a + (k + 0x1) * m); }
+      if ((k + 2) < p) { a_0_f_i_2_k = _mm512_maskz_load_ps(mask, a + (k + 0x2) * m); }
+      if ((k + 3) < p) { a_0_f_i_3_k = _mm512_maskz_load_ps(mask, a + (k + 0x3) * m); }
+
+      matrix_transpose_4x16(a_0_f_i_0_k, a_0_f_i_1_k, a_0_f_i_2_k, a_0_f_i_3_k);
+
+      if (mask == 0xffff) {
+        _mm512_store_ps(at + 0x00, a_0_f_i_0_k);
+        _mm512_store_ps(at + 0x10, a_0_f_i_1_k);
+        _mm512_store_ps(at + 0x20, a_0_f_i_2_k);
+        _mm512_store_ps(at + 0x30, a_0_f_i_3_k);
+        at += 0x40;
+      } else {
+        if((mask & 0x000f) == 0x000f) { _mm512_store_ps(at + 0x00, a_0_f_i_0_k); at_t += 0x10; }
+        if((mask & 0x00f0) == 0x00f0) { _mm512_store_ps(at + 0x10, a_0_f_i_1_k); at_t += 0x10; }
+        if((mask & 0x0f00) == 0x0f00) { _mm512_store_ps(at + 0x20, a_0_f_i_2_k); at_t += 0x10; }
+        if((mask & 0xf000) == 0xf000) { _mm512_store_ps(at + 0x30, a_0_f_i_3_k); at_t += 0x10; }
+        at = at_t;
+      }
+    }
+
+    a += 0x10;
+  }
 }
+
+static inline void
+sgemm_opt(uint64_t m, uint64_t n, uint64_t p,
+  const float pAlpha, const float * A, const float * B,
+  const float pBeta, float * C)
+{
+
+  uint64_t ap = (p + 3) & 0xfffffffc;
+  float *AT = (float *)mkl_malloc(m*ap*sizeof(float), 2048*1024);
+  copy_matrix_a(AT, A, m, p);
+
+  uint64_t LII = 0;
+  uint64_t LJJ = 0;
+
+  uint64_t LI = 0;
+  uint64_t LJ = 0;
+
+//p = 64;
+#define TNUM (72)
+#pragma omp parallel num_threads(TNUM)
+  {
+    uint64_t tid = omp_get_thread_num();
+    uint64_t block_id_j = 0;
+    uint64_t thread_size_j = 0;
+    uint64_t block_id_i = 0;
+    uint64_t thread_size_i = 0;
+
+#if 1
+    if (n == 50004) {
+      thread_size_j = 704;
+      block_id_j = tid;
+      thread_size_i = m;
+      block_id_i = 0;
+
+      LII = 512;
+      LJJ = 704;
+      LI = 64;
+      LJ = 64;
+    } else if (n == 35820) {
+      thread_size_j = 512;
+      block_id_j = tid;
+      thread_size_i = m;
+      block_id_i = 0;
+
+      LII = 512;
+      LJJ = 512;
+      LI = 64;
+      LJ = 64;
+    } else if (n == 2000) {
+      if (m == 500) {
+        thread_size_j = 32;
+        block_id_j = tid;
+        thread_size_i = m;
+        block_id_i = 0;
+
+        LII = 500;
+        LJJ = 32;
+        LI = 64;
+        LJ = 32;
+      } else if (m == 1000) {
+        thread_size_j = 64;
+        block_id_j = tid & 0x1f;
+        thread_size_i = 512;
+        block_id_i = (tid >> 5);
+
+        LII = 512;
+        LJJ = 32;
+        LI = 64;
+        LJ = 32;
+      }
+      if (tid >= 64) thread_size_j = 0;
+    } else if (n == 500) {
+      if (m == 500) {
+        thread_size_j = 64;
+        block_id_j = tid & 0x7;
+        thread_size_i = 64;
+        block_id_i = (tid >> 3);
+
+        LII = 64;
+        LJJ = 64;
+        LI = 64;
+        LJ = 32;
+      } else if (m == 1000) {
+        thread_size_j = 64;
+        block_id_j = tid & 0x7;
+        thread_size_i = 128;
+        block_id_i = (tid >> 3);
+
+        LII = 128;
+        LJJ = 64;
+        LI = 64;
+        LJ = 32;
+      }
+      if (tid >= 64) thread_size_j = 0;
+    }
+#else
+    thread_size_j = n;
+    block_id_j = tid;
+    thread_size_i = m;
+    block_id_i = 0;
+
+    LII = 16;
+    LJJ = 16;
+    LI = 16;
+    LJ = 16;
 #endif
+
+    /* m=500; n=50004; p=64; */
+    for (uint64_t tid_j = 0; tid_j < thread_size_j; tid_j += LJJ) {
+      uint64_t jjj = thread_size_j * block_id_j + tid_j;
+      if (jjj >= n) {
+        break;
+      }
+
+      for (uint64_t tid_i = 0; tid_i < thread_size_i; tid_i += LII) {
+        uint64_t iii = thread_size_i * block_id_i + tid_i;
+        if (iii >= m) {
+          break;
+        }
+
+        for (uint64_t jj = jjj; jj < jjj + LJJ; jj += LJ) {
+          if (jj >= n) {
+            break;
+          }
+          for (uint64_t ii = iii; ii < iii + LII; ii += LI) {
+            __mmask16 mask = 0xffff;
+            if (ii >= m) {
+                break;
+            }
+            for (uint64_t j = jj; j < jj + LJ; j += 16) {
+              uint64_t i = ii;
+              if (j >= n) { break; }
+              if ((j + 16) >= n) {
+                mask = (1u << (n - j)) - 1;
+              }
+
+              for (; i < ii + LI; i += 16) {
+                if ((i + 16) > m) { break; }
+                uint64_t k = 0;
+                __m128 *a_base = (__m128 *)(AT + i * ap);
+                __m512 c0 = _mm512_setzero_ps();
+                __m512 c1 = _mm512_setzero_ps();
+                __m512 c2 = _mm512_setzero_ps();
+                __m512 c3 = _mm512_setzero_ps();
+                __m512 c4 = _mm512_setzero_ps();
+                __m512 c5 = _mm512_setzero_ps();
+                __m512 c6 = _mm512_setzero_ps();
+                __m512 c7 = _mm512_setzero_ps();
+                __m512 c8 = _mm512_setzero_ps();
+                __m512 c9 = _mm512_setzero_ps();
+                __m512 ca = _mm512_setzero_ps();
+                __m512 cb = _mm512_setzero_ps();
+                __m512 cc = _mm512_setzero_ps();
+                __m512 cd = _mm512_setzero_ps();
+                __m512 ce = _mm512_setzero_ps();
+                __m512 cf = _mm512_setzero_ps();
+
+                for (k = 0; k < p; k = k + 16) {
+                  if (k + 16 > p) break;
+
+                  float *b_base = (float *)(B + k * n + j);
+
+                  __m512 b00 = _mm512_maskz_load_ps(mask, b_base + n*0x0);
+                  __m512 b10 = _mm512_maskz_load_ps(mask, b_base + n*0x1);
+                  __m512 b20 = _mm512_maskz_load_ps(mask, b_base + n*0x2);
+                  __m512 b30 = _mm512_maskz_load_ps(mask, b_base + n*0x3);
+                  __m512 b40 = _mm512_maskz_load_ps(mask, b_base + n*0x4);
+                  __m512 b50 = _mm512_maskz_load_ps(mask, b_base + n*0x5);
+                  __m512 b60 = _mm512_maskz_load_ps(mask, b_base + n*0x6);
+                  __m512 b70 = _mm512_maskz_load_ps(mask, b_base + n*0x7);
+                  __m512 b80 = _mm512_maskz_load_ps(mask, b_base + n*0x8);
+                  __m512 b90 = _mm512_maskz_load_ps(mask, b_base + n*0x9);
+                  __m512 ba0 = _mm512_maskz_load_ps(mask, b_base + n*0xa);
+                  __m512 bb0 = _mm512_maskz_load_ps(mask, b_base + n*0xb);
+                  __m512 bc0 = _mm512_maskz_load_ps(mask, b_base + n*0xc);
+                  __m512 bd0 = _mm512_maskz_load_ps(mask, b_base + n*0xd);
+                  __m512 be0 = _mm512_maskz_load_ps(mask, b_base + n*0xe);
+                  __m512 bf0 = _mm512_maskz_load_ps(mask, b_base + n*0xf);
+
+                  c0 = _mm512_4fmadd_ps(c0, b00, b10, b20, b30, a_base+0x00);
+                  c1 = _mm512_4fmadd_ps(c1, b00, b10, b20, b30, a_base+0x01);
+                  c2 = _mm512_4fmadd_ps(c2, b00, b10, b20, b30, a_base+0x02);
+                  c3 = _mm512_4fmadd_ps(c3, b00, b10, b20, b30, a_base+0x03);
+                  c4 = _mm512_4fmadd_ps(c4, b00, b10, b20, b30, a_base+0x04);
+                  c5 = _mm512_4fmadd_ps(c5, b00, b10, b20, b30, a_base+0x05);
+                  c6 = _mm512_4fmadd_ps(c6, b00, b10, b20, b30, a_base+0x06);
+                  c7 = _mm512_4fmadd_ps(c7, b00, b10, b20, b30, a_base+0x07);
+                  c8 = _mm512_4fmadd_ps(c8, b00, b10, b20, b30, a_base+0x08);
+                  c9 = _mm512_4fmadd_ps(c9, b00, b10, b20, b30, a_base+0x09);
+                  ca = _mm512_4fmadd_ps(ca, b00, b10, b20, b30, a_base+0x0a);
+                  cb = _mm512_4fmadd_ps(cb, b00, b10, b20, b30, a_base+0x0b);
+                  cc = _mm512_4fmadd_ps(cc, b00, b10, b20, b30, a_base+0x0c);
+                  cd = _mm512_4fmadd_ps(cd, b00, b10, b20, b30, a_base+0x0d);
+                  ce = _mm512_4fmadd_ps(ce, b00, b10, b20, b30, a_base+0x0e);
+                  cf = _mm512_4fmadd_ps(cf, b00, b10, b20, b30, a_base+0x0f);
+
+                  c0 = _mm512_4fmadd_ps(c0, b40, b50, b60, b70, a_base+0x10);
+                  c1 = _mm512_4fmadd_ps(c1, b40, b50, b60, b70, a_base+0x11);
+                  c2 = _mm512_4fmadd_ps(c2, b40, b50, b60, b70, a_base+0x12);
+                  c3 = _mm512_4fmadd_ps(c3, b40, b50, b60, b70, a_base+0x13);
+                  c4 = _mm512_4fmadd_ps(c4, b40, b50, b60, b70, a_base+0x14);
+                  c5 = _mm512_4fmadd_ps(c5, b40, b50, b60, b70, a_base+0x15);
+                  c6 = _mm512_4fmadd_ps(c6, b40, b50, b60, b70, a_base+0x16);
+                  c7 = _mm512_4fmadd_ps(c7, b40, b50, b60, b70, a_base+0x17);
+                  c8 = _mm512_4fmadd_ps(c8, b40, b50, b60, b70, a_base+0x18);
+                  c9 = _mm512_4fmadd_ps(c9, b40, b50, b60, b70, a_base+0x19);
+                  ca = _mm512_4fmadd_ps(ca, b40, b50, b60, b70, a_base+0x1a);
+                  cb = _mm512_4fmadd_ps(cb, b40, b50, b60, b70, a_base+0x1b);
+                  cc = _mm512_4fmadd_ps(cc, b40, b50, b60, b70, a_base+0x1c);
+                  cd = _mm512_4fmadd_ps(cd, b40, b50, b60, b70, a_base+0x1d);
+                  ce = _mm512_4fmadd_ps(ce, b40, b50, b60, b70, a_base+0x1e);
+                  cf = _mm512_4fmadd_ps(cf, b40, b50, b60, b70, a_base+0x1f);
+
+                  c0 = _mm512_4fmadd_ps(c0, b80, b90, ba0, bb0, a_base+0x20);
+                  c1 = _mm512_4fmadd_ps(c1, b80, b90, ba0, bb0, a_base+0x21);
+                  c2 = _mm512_4fmadd_ps(c2, b80, b90, ba0, bb0, a_base+0x22);
+                  c3 = _mm512_4fmadd_ps(c3, b80, b90, ba0, bb0, a_base+0x23);
+                  c4 = _mm512_4fmadd_ps(c4, b80, b90, ba0, bb0, a_base+0x24);
+                  c5 = _mm512_4fmadd_ps(c5, b80, b90, ba0, bb0, a_base+0x25);
+                  c6 = _mm512_4fmadd_ps(c6, b80, b90, ba0, bb0, a_base+0x26);
+                  c7 = _mm512_4fmadd_ps(c7, b80, b90, ba0, bb0, a_base+0x27);
+                  c8 = _mm512_4fmadd_ps(c8, b80, b90, ba0, bb0, a_base+0x28);
+                  c9 = _mm512_4fmadd_ps(c9, b80, b90, ba0, bb0, a_base+0x29);
+                  ca = _mm512_4fmadd_ps(ca, b80, b90, ba0, bb0, a_base+0x2a);
+                  cb = _mm512_4fmadd_ps(cb, b80, b90, ba0, bb0, a_base+0x2b);
+                  cc = _mm512_4fmadd_ps(cc, b80, b90, ba0, bb0, a_base+0x2c);
+                  cd = _mm512_4fmadd_ps(cd, b80, b90, ba0, bb0, a_base+0x2d);
+                  ce = _mm512_4fmadd_ps(ce, b80, b90, ba0, bb0, a_base+0x2e);
+                  cf = _mm512_4fmadd_ps(cf, b80, b90, ba0, bb0, a_base+0x2f);
+
+                  c0 = _mm512_4fmadd_ps(c0, bc0, bd0, be0, bf0, a_base+0x30);
+                  c1 = _mm512_4fmadd_ps(c1, bc0, bd0, be0, bf0, a_base+0x31);
+                  c2 = _mm512_4fmadd_ps(c2, bc0, bd0, be0, bf0, a_base+0x32);
+                  c3 = _mm512_4fmadd_ps(c3, bc0, bd0, be0, bf0, a_base+0x33);
+                  c4 = _mm512_4fmadd_ps(c4, bc0, bd0, be0, bf0, a_base+0x34);
+                  c5 = _mm512_4fmadd_ps(c5, bc0, bd0, be0, bf0, a_base+0x35);
+                  c6 = _mm512_4fmadd_ps(c6, bc0, bd0, be0, bf0, a_base+0x36);
+                  c7 = _mm512_4fmadd_ps(c7, bc0, bd0, be0, bf0, a_base+0x37);
+                  c8 = _mm512_4fmadd_ps(c8, bc0, bd0, be0, bf0, a_base+0x38);
+                  c9 = _mm512_4fmadd_ps(c9, bc0, bd0, be0, bf0, a_base+0x39);
+                  ca = _mm512_4fmadd_ps(ca, bc0, bd0, be0, bf0, a_base+0x3a);
+                  cb = _mm512_4fmadd_ps(cb, bc0, bd0, be0, bf0, a_base+0x3b);
+                  cc = _mm512_4fmadd_ps(cc, bc0, bd0, be0, bf0, a_base+0x3c);
+                  cd = _mm512_4fmadd_ps(cd, bc0, bd0, be0, bf0, a_base+0x3d);
+                  ce = _mm512_4fmadd_ps(ce, bc0, bd0, be0, bf0, a_base+0x3e);
+                  cf = _mm512_4fmadd_ps(cf, bc0, bd0, be0, bf0, a_base+0x3f);
+
+                  a_base += 0x40;
+                }
+
+                if (k + 8 <= p) {
+                  float *b_base = (float *)(B + k * n + j);
+
+                  __m512 b00 = _mm512_maskz_load_ps(mask, b_base + n*0x0);
+                  __m512 b10 = _mm512_maskz_load_ps(mask, b_base + n*0x1);
+                  __m512 b20 = _mm512_maskz_load_ps(mask, b_base + n*0x2);
+                  __m512 b30 = _mm512_maskz_load_ps(mask, b_base + n*0x3);
+                  __m512 b40 = _mm512_maskz_load_ps(mask, b_base + n*0x4);
+                  __m512 b50 = _mm512_maskz_load_ps(mask, b_base + n*0x5);
+                  __m512 b60 = _mm512_maskz_load_ps(mask, b_base + n*0x6);
+                  __m512 b70 = _mm512_maskz_load_ps(mask, b_base + n*0x7);
+
+                  c0 = _mm512_4fmadd_ps(c0, b00, b10, b20, b30, a_base+0x00);
+                  c1 = _mm512_4fmadd_ps(c1, b00, b10, b20, b30, a_base+0x01);
+                  c2 = _mm512_4fmadd_ps(c2, b00, b10, b20, b30, a_base+0x02);
+                  c3 = _mm512_4fmadd_ps(c3, b00, b10, b20, b30, a_base+0x03);
+                  c4 = _mm512_4fmadd_ps(c4, b00, b10, b20, b30, a_base+0x04);
+                  c5 = _mm512_4fmadd_ps(c5, b00, b10, b20, b30, a_base+0x05);
+                  c6 = _mm512_4fmadd_ps(c6, b00, b10, b20, b30, a_base+0x06);
+                  c7 = _mm512_4fmadd_ps(c7, b00, b10, b20, b30, a_base+0x07);
+                  c8 = _mm512_4fmadd_ps(c8, b00, b10, b20, b30, a_base+0x08);
+                  c9 = _mm512_4fmadd_ps(c9, b00, b10, b20, b30, a_base+0x09);
+                  ca = _mm512_4fmadd_ps(ca, b00, b10, b20, b30, a_base+0x0a);
+                  cb = _mm512_4fmadd_ps(cb, b00, b10, b20, b30, a_base+0x0b);
+                  cc = _mm512_4fmadd_ps(cc, b00, b10, b20, b30, a_base+0x0c);
+                  cd = _mm512_4fmadd_ps(cd, b00, b10, b20, b30, a_base+0x0d);
+                  ce = _mm512_4fmadd_ps(ce, b00, b10, b20, b30, a_base+0x0e);
+                  cf = _mm512_4fmadd_ps(cf, b00, b10, b20, b30, a_base+0x0f);
+
+                  c0 = _mm512_4fmadd_ps(c0, b40, b50, b60, b70, a_base+0x10);
+                  c1 = _mm512_4fmadd_ps(c1, b40, b50, b60, b70, a_base+0x11);
+                  c2 = _mm512_4fmadd_ps(c2, b40, b50, b60, b70, a_base+0x12);
+                  c3 = _mm512_4fmadd_ps(c3, b40, b50, b60, b70, a_base+0x13);
+                  c4 = _mm512_4fmadd_ps(c4, b40, b50, b60, b70, a_base+0x14);
+                  c5 = _mm512_4fmadd_ps(c5, b40, b50, b60, b70, a_base+0x15);
+                  c6 = _mm512_4fmadd_ps(c6, b40, b50, b60, b70, a_base+0x16);
+                  c7 = _mm512_4fmadd_ps(c7, b40, b50, b60, b70, a_base+0x17);
+                  c8 = _mm512_4fmadd_ps(c8, b40, b50, b60, b70, a_base+0x18);
+                  c9 = _mm512_4fmadd_ps(c9, b40, b50, b60, b70, a_base+0x19);
+                  ca = _mm512_4fmadd_ps(ca, b40, b50, b60, b70, a_base+0x1a);
+                  cb = _mm512_4fmadd_ps(cb, b40, b50, b60, b70, a_base+0x1b);
+                  cc = _mm512_4fmadd_ps(cc, b40, b50, b60, b70, a_base+0x1c);
+                  cd = _mm512_4fmadd_ps(cd, b40, b50, b60, b70, a_base+0x1d);
+                  ce = _mm512_4fmadd_ps(ce, b40, b50, b60, b70, a_base+0x1e);
+                  cf = _mm512_4fmadd_ps(cf, b40, b50, b60, b70, a_base+0x1f);
+
+                  a_base += 0x20;
+                  k += 8;
+                }
+
+                if (k + 4 <= p) {
+
+                  float *b_base = (float *)(B + k * n + j);
+
+                  __m512 b00 = _mm512_maskz_load_ps(mask, b_base + n*0x0);
+                  __m512 b10 = _mm512_maskz_load_ps(mask, b_base + n*0x1);
+                  __m512 b20 = _mm512_maskz_load_ps(mask, b_base + n*0x2);
+                  __m512 b30 = _mm512_maskz_load_ps(mask, b_base + n*0x3);
+
+                  c0 = _mm512_4fmadd_ps(c0, b00, b10, b20, b30, a_base+0x00);
+                  c1 = _mm512_4fmadd_ps(c1, b00, b10, b20, b30, a_base+0x01);
+                  c2 = _mm512_4fmadd_ps(c2, b00, b10, b20, b30, a_base+0x02);
+                  c3 = _mm512_4fmadd_ps(c3, b00, b10, b20, b30, a_base+0x03);
+                  c4 = _mm512_4fmadd_ps(c4, b00, b10, b20, b30, a_base+0x04);
+                  c5 = _mm512_4fmadd_ps(c5, b00, b10, b20, b30, a_base+0x05);
+                  c6 = _mm512_4fmadd_ps(c6, b00, b10, b20, b30, a_base+0x06);
+                  c7 = _mm512_4fmadd_ps(c7, b00, b10, b20, b30, a_base+0x07);
+                  c8 = _mm512_4fmadd_ps(c8, b00, b10, b20, b30, a_base+0x08);
+                  c9 = _mm512_4fmadd_ps(c9, b00, b10, b20, b30, a_base+0x09);
+                  ca = _mm512_4fmadd_ps(ca, b00, b10, b20, b30, a_base+0x0a);
+                  cb = _mm512_4fmadd_ps(cb, b00, b10, b20, b30, a_base+0x0b);
+                  cc = _mm512_4fmadd_ps(cc, b00, b10, b20, b30, a_base+0x0c);
+                  cd = _mm512_4fmadd_ps(cd, b00, b10, b20, b30, a_base+0x0d);
+                  ce = _mm512_4fmadd_ps(ce, b00, b10, b20, b30, a_base+0x0e);
+                  cf = _mm512_4fmadd_ps(cf, b00, b10, b20, b30, a_base+0x0f);
+
+                  a_base += 0x10;
+                  k += 4;
+                }
+
+                if (k < p) {
+
+                  float *b_base = (float *)(B + k * n + j);
+                  __m512 b00 = _mm512_setzero_ps();
+                  __m512 b10 = _mm512_setzero_ps();
+                  __m512 b20 = _mm512_setzero_ps();
+                  __m512 b30 = _mm512_setzero_ps();
+
+                  b00 = _mm512_maskz_load_ps(mask, b_base + n*0x0);
+                  if (k + 1 < p) b10 = _mm512_maskz_load_ps(mask, b_base + n*0x1);
+                  if (k + 2 < p) b20 = _mm512_maskz_load_ps(mask, b_base + n*0x2);
+                  if (k + 3 < p) b30 = _mm512_maskz_load_ps(mask, b_base + n*0x3);
+
+                  c0 = _mm512_4fmadd_ps(c0, b00, b10, b20, b30, a_base+0x00);
+                  c1 = _mm512_4fmadd_ps(c1, b00, b10, b20, b30, a_base+0x01);
+                  c2 = _mm512_4fmadd_ps(c2, b00, b10, b20, b30, a_base+0x02);
+                  c3 = _mm512_4fmadd_ps(c3, b00, b10, b20, b30, a_base+0x03);
+                  c4 = _mm512_4fmadd_ps(c4, b00, b10, b20, b30, a_base+0x04);
+                  c5 = _mm512_4fmadd_ps(c5, b00, b10, b20, b30, a_base+0x05);
+                  c6 = _mm512_4fmadd_ps(c6, b00, b10, b20, b30, a_base+0x06);
+                  c7 = _mm512_4fmadd_ps(c7, b00, b10, b20, b30, a_base+0x07);
+                  c8 = _mm512_4fmadd_ps(c8, b00, b10, b20, b30, a_base+0x08);
+                  c9 = _mm512_4fmadd_ps(c9, b00, b10, b20, b30, a_base+0x09);
+                  ca = _mm512_4fmadd_ps(ca, b00, b10, b20, b30, a_base+0x0a);
+                  cb = _mm512_4fmadd_ps(cb, b00, b10, b20, b30, a_base+0x0b);
+                  cc = _mm512_4fmadd_ps(cc, b00, b10, b20, b30, a_base+0x0c);
+                  cd = _mm512_4fmadd_ps(cd, b00, b10, b20, b30, a_base+0x0d);
+                  ce = _mm512_4fmadd_ps(ce, b00, b10, b20, b30, a_base+0x0e);
+                  cf = _mm512_4fmadd_ps(cf, b00, b10, b20, b30, a_base+0x0f);
+
+                  a_base += 0x10;
+                  k += 4;
+                }
+
+                matrix_transpose_16x16(c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, ca, cb, cc, cd, ce, cf);
+
+                float *c_base = C + j*m + i;
+
+                if (mask == 0xffff) {
+                  __m512 p0 = _mm512_load_ps(c_base + 0x0 * m);
+                  __m512 p1 = _mm512_load_ps(c_base + 0x1 * m);
+                  __m512 p2 = _mm512_load_ps(c_base + 0x2 * m);
+                  __m512 p3 = _mm512_load_ps(c_base + 0x3 * m);
+                  __m512 p4 = _mm512_load_ps(c_base + 0x4 * m);
+                  __m512 p5 = _mm512_load_ps(c_base + 0x5 * m);
+                  __m512 p6 = _mm512_load_ps(c_base + 0x6 * m);
+                  __m512 p7 = _mm512_load_ps(c_base + 0x7 * m);
+                  __m512 p8 = _mm512_load_ps(c_base + 0x8 * m);
+                  __m512 p9 = _mm512_load_ps(c_base + 0x9 * m);
+                  __m512 pa = _mm512_load_ps(c_base + 0xa * m);
+                  __m512 pb = _mm512_load_ps(c_base + 0xb * m);
+                  __m512 pc = _mm512_load_ps(c_base + 0xc * m);
+                  __m512 pd = _mm512_load_ps(c_base + 0xd * m);
+                  __m512 pe = _mm512_load_ps(c_base + 0xe * m);
+                  __m512 pf = _mm512_load_ps(c_base + 0xf * m);
+
+                  c0 = _mm512_add_ps(c0, p0);
+                  c1 = _mm512_add_ps(c1, p1);
+                  c2 = _mm512_add_ps(c2, p2);
+                  c3 = _mm512_add_ps(c3, p3);
+                  c4 = _mm512_add_ps(c4, p4);
+                  c5 = _mm512_add_ps(c5, p5);
+                  c6 = _mm512_add_ps(c6, p6);
+                  c7 = _mm512_add_ps(c7, p7);
+                  c8 = _mm512_add_ps(c8, p8);
+                  c9 = _mm512_add_ps(c9, p9);
+                  ca = _mm512_add_ps(ca, pa);
+                  cb = _mm512_add_ps(cb, pb);
+                  cc = _mm512_add_ps(cc, pc);
+                  cd = _mm512_add_ps(cd, pd);
+                  ce = _mm512_add_ps(ce, pe);
+                  cf = _mm512_add_ps(cf, pf);
+
+                  _mm512_store_ps(c_base + 0x0 * m, c0);
+                  _mm512_store_ps(c_base + 0x1 * m, c1);
+                  _mm512_store_ps(c_base + 0x2 * m, c2);
+                  _mm512_store_ps(c_base + 0x3 * m, c3);
+                  _mm512_store_ps(c_base + 0x4 * m, c4);
+                  _mm512_store_ps(c_base + 0x5 * m, c5);
+                  _mm512_store_ps(c_base + 0x6 * m, c6);
+                  _mm512_store_ps(c_base + 0x7 * m, c7);
+                  _mm512_store_ps(c_base + 0x8 * m, c8);
+                  _mm512_store_ps(c_base + 0x9 * m, c9);
+                  _mm512_store_ps(c_base + 0xa * m, ca);
+                  _mm512_store_ps(c_base + 0xb * m, cb);
+                  _mm512_store_ps(c_base + 0xc * m, cc);
+                  _mm512_store_ps(c_base + 0xd * m, cd);
+                  _mm512_store_ps(c_base + 0xe * m, ce);
+                  _mm512_store_ps(c_base + 0xf * m, cf);
+
+                } else if (mask == 0xfff) {
+                  __m512 p0 = _mm512_load_ps(c_base + 0x0 * m);
+                  __m512 p1 = _mm512_load_ps(c_base + 0x1 * m);
+                  __m512 p2 = _mm512_load_ps(c_base + 0x2 * m);
+                  __m512 p3 = _mm512_load_ps(c_base + 0x3 * m);
+                  __m512 p4 = _mm512_load_ps(c_base + 0x4 * m);
+                  __m512 p5 = _mm512_load_ps(c_base + 0x5 * m);
+                  __m512 p6 = _mm512_load_ps(c_base + 0x6 * m);
+                  __m512 p7 = _mm512_load_ps(c_base + 0x7 * m);
+                  __m512 p8 = _mm512_load_ps(c_base + 0x8 * m);
+                  __m512 p9 = _mm512_load_ps(c_base + 0x9 * m);
+                  __m512 pa = _mm512_load_ps(c_base + 0xa * m);
+                  __m512 pb = _mm512_load_ps(c_base + 0xb * m);
+
+                  c0 = _mm512_add_ps(c0, p0);
+                  c1 = _mm512_add_ps(c1, p1);
+                  c2 = _mm512_add_ps(c2, p2);
+                  c3 = _mm512_add_ps(c3, p3);
+                  c4 = _mm512_add_ps(c4, p4);
+                  c5 = _mm512_add_ps(c5, p5);
+                  c6 = _mm512_add_ps(c6, p6);
+                  c7 = _mm512_add_ps(c7, p7);
+                  c8 = _mm512_add_ps(c8, p8);
+                  c9 = _mm512_add_ps(c9, p9);
+                  ca = _mm512_add_ps(ca, pa);
+                  cb = _mm512_add_ps(cb, pb);
+
+                  _mm512_store_ps(c_base + 0x0 * m, c0);
+                  _mm512_store_ps(c_base + 0x1 * m, c1);
+                  _mm512_store_ps(c_base + 0x2 * m, c2);
+                  _mm512_store_ps(c_base + 0x3 * m, c3);
+                  _mm512_store_ps(c_base + 0x4 * m, c4);
+                  _mm512_store_ps(c_base + 0x5 * m, c5);
+                  _mm512_store_ps(c_base + 0x6 * m, c6);
+                  _mm512_store_ps(c_base + 0x7 * m, c7);
+                  _mm512_store_ps(c_base + 0x8 * m, c8);
+                  _mm512_store_ps(c_base + 0x9 * m, c9);
+                  _mm512_store_ps(c_base + 0xa * m, ca);
+                  _mm512_store_ps(c_base + 0xb * m, cb);
+
+                } else if (mask == 0xf) {
+                  __m512 p0, p1, p2, p3;
+
+                  p0 = _mm512_load_ps(c_base + 0x0 * m);
+                  p1 = _mm512_load_ps(c_base + 0x1 * m);
+                  p2 = _mm512_load_ps(c_base + 0x2 * m);
+                  p3 = _mm512_load_ps(c_base + 0x3 * m);
+
+                  c0 = _mm512_add_ps(c0, p0);
+                  c1 = _mm512_add_ps(c1, p1);
+                  c2 = _mm512_add_ps(c2, p2);
+                  c3 = _mm512_add_ps(c3, p3);
+
+                  _mm512_store_ps(c_base + 0x0 * m, c0);
+                  _mm512_store_ps(c_base + 0x1 * m, c1);
+                  _mm512_store_ps(c_base + 0x2 * m, c2);
+                  _mm512_store_ps(c_base + 0x3 * m, c3);
+                } else {
+                  assert(0);
+                }
+              }
+
+
+              if ((m-i) == 4 && ((i + 4) <= (ii + LI))) {
+                __m128 *a_base = (__m128 *)(AT + i * ap);
+
+                uint64_t k = 0;
+                __m512 c0 = _mm512_setzero_ps();
+                __m512 c1 = _mm512_setzero_ps();
+                __m512 c2 = _mm512_setzero_ps();
+                __m512 c3 = _mm512_setzero_ps();
+
+                for (; k < p; k = k + 16) {
+                  if (k + 16 > p) break;
+
+                  float *b_base = (float *)(B + k * n + j);
+
+                  __m512 b00 = _mm512_maskz_load_ps(mask, b_base + n*0x0);
+                  __m512 b10 = _mm512_maskz_load_ps(mask, b_base + n*0x1);
+                  __m512 b20 = _mm512_maskz_load_ps(mask, b_base + n*0x2);
+                  __m512 b30 = _mm512_maskz_load_ps(mask, b_base + n*0x3);
+                  __m512 b40 = _mm512_maskz_load_ps(mask, b_base + n*0x4);
+                  __m512 b50 = _mm512_maskz_load_ps(mask, b_base + n*0x5);
+                  __m512 b60 = _mm512_maskz_load_ps(mask, b_base + n*0x6);
+                  __m512 b70 = _mm512_maskz_load_ps(mask, b_base + n*0x7);
+                  __m512 b80 = _mm512_maskz_load_ps(mask, b_base + n*0x8);
+                  __m512 b90 = _mm512_maskz_load_ps(mask, b_base + n*0x9);
+                  __m512 ba0 = _mm512_maskz_load_ps(mask, b_base + n*0xa);
+                  __m512 bb0 = _mm512_maskz_load_ps(mask, b_base + n*0xb);
+                  __m512 bc0 = _mm512_maskz_load_ps(mask, b_base + n*0xc);
+                  __m512 bd0 = _mm512_maskz_load_ps(mask, b_base + n*0xd);
+                  __m512 be0 = _mm512_maskz_load_ps(mask, b_base + n*0xe);
+                  __m512 bf0 = _mm512_maskz_load_ps(mask, b_base + n*0xf);
+
+                  c0 = _mm512_4fmadd_ps(c0, b00, b10, b20, b30, a_base+0x00);
+                  c1 = _mm512_4fmadd_ps(c1, b00, b10, b20, b30, a_base+0x01);
+                  c2 = _mm512_4fmadd_ps(c2, b00, b10, b20, b30, a_base+0x02);
+                  c3 = _mm512_4fmadd_ps(c3, b00, b10, b20, b30, a_base+0x03);
+
+                  c0 = _mm512_4fmadd_ps(c0, b40, b50, b60, b70, a_base+0x04);
+                  c1 = _mm512_4fmadd_ps(c1, b40, b50, b60, b70, a_base+0x05);
+                  c2 = _mm512_4fmadd_ps(c2, b40, b50, b60, b70, a_base+0x06);
+                  c3 = _mm512_4fmadd_ps(c3, b40, b50, b60, b70, a_base+0x07);
+
+                  c0 = _mm512_4fmadd_ps(c0, b80, b90, ba0, bb0, a_base+0x08);
+                  c1 = _mm512_4fmadd_ps(c1, b80, b90, ba0, bb0, a_base+0x09);
+                  c2 = _mm512_4fmadd_ps(c2, b80, b90, ba0, bb0, a_base+0x0a);
+                  c3 = _mm512_4fmadd_ps(c3, b80, b90, ba0, bb0, a_base+0x0b);
+
+                  c0 = _mm512_4fmadd_ps(c0, bc0, bd0, be0, bf0, a_base+0x0c);
+                  c1 = _mm512_4fmadd_ps(c1, bc0, bd0, be0, bf0, a_base+0x0d);
+                  c2 = _mm512_4fmadd_ps(c2, bc0, bd0, be0, bf0, a_base+0x0e);
+                  c3 = _mm512_4fmadd_ps(c3, bc0, bd0, be0, bf0, a_base+0x0f);
+
+                  a_base += 0x10;
+                }
+
+                if (k + 8 <= p) {
+                  float *b_base = (float *)(B + k * n + j);
+
+                  __m512 b00 = _mm512_maskz_load_ps(mask, b_base + n*0x0);
+                  __m512 b10 = _mm512_maskz_load_ps(mask, b_base + n*0x1);
+                  __m512 b20 = _mm512_maskz_load_ps(mask, b_base + n*0x2);
+                  __m512 b30 = _mm512_maskz_load_ps(mask, b_base + n*0x3);
+                  __m512 b40 = _mm512_maskz_load_ps(mask, b_base + n*0x4);
+                  __m512 b50 = _mm512_maskz_load_ps(mask, b_base + n*0x5);
+                  __m512 b60 = _mm512_maskz_load_ps(mask, b_base + n*0x6);
+                  __m512 b70 = _mm512_maskz_load_ps(mask, b_base + n*0x7);
+
+                  c0 = _mm512_4fmadd_ps(c0, b00, b10, b20, b30, a_base+0x00);
+                  c1 = _mm512_4fmadd_ps(c1, b00, b10, b20, b30, a_base+0x01);
+                  c2 = _mm512_4fmadd_ps(c2, b00, b10, b20, b30, a_base+0x02);
+                  c3 = _mm512_4fmadd_ps(c3, b00, b10, b20, b30, a_base+0x03);
+
+                  c0 = _mm512_4fmadd_ps(c0, b40, b50, b60, b70, a_base+0x04);
+                  c1 = _mm512_4fmadd_ps(c1, b40, b50, b60, b70, a_base+0x05);
+                  c2 = _mm512_4fmadd_ps(c2, b40, b50, b60, b70, a_base+0x06);
+                  c3 = _mm512_4fmadd_ps(c3, b40, b50, b60, b70, a_base+0x07);
+
+                  a_base += 0x08;
+                  k += 8;
+                }
+
+                if (k + 4 <= p) {
+
+                  float *b_base = (float *)(B + k * n + j);
+
+                  __m512 b00 = _mm512_maskz_load_ps(mask, b_base + n*0x0);
+                  __m512 b10 = _mm512_maskz_load_ps(mask, b_base + n*0x1);
+                  __m512 b20 = _mm512_maskz_load_ps(mask, b_base + n*0x2);
+                  __m512 b30 = _mm512_maskz_load_ps(mask, b_base + n*0x3);
+
+                  c0 = _mm512_4fmadd_ps(c0, b00, b10, b20, b30, a_base+0x00);
+                  c1 = _mm512_4fmadd_ps(c1, b00, b10, b20, b30, a_base+0x01);
+                  c2 = _mm512_4fmadd_ps(c2, b00, b10, b20, b30, a_base+0x02);
+                  c3 = _mm512_4fmadd_ps(c3, b00, b10, b20, b30, a_base+0x03);
+
+                  a_base += 0x04;
+                  k += 4;
+                }
+
+                if (k < p) {
+
+                  float *b_base = (float *)(B + k * n + j);
+
+                  __m512 b00 = _mm512_setzero_ps();
+                  __m512 b10 = _mm512_setzero_ps();
+                  __m512 b20 = _mm512_setzero_ps();
+                  __m512 b30 = _mm512_setzero_ps();
+
+                  if (k + 0 < p) b00 = _mm512_maskz_load_ps(mask, b_base + n*0x0);
+                  if (k + 1 < p) b10 = _mm512_maskz_load_ps(mask, b_base + n*0x1);
+                  if (k + 2 < p) b20 = _mm512_maskz_load_ps(mask, b_base + n*0x2);
+                  if (k + 3 < p) b30 = _mm512_maskz_load_ps(mask, b_base + n*0x3);
+
+                  c0 = _mm512_4fmadd_ps(c0, b00, b10, b20, b30, a_base+0x00);
+                  c1 = _mm512_4fmadd_ps(c1, b00, b10, b20, b30, a_base+0x01);
+                  c2 = _mm512_4fmadd_ps(c2, b00, b10, b20, b30, a_base+0x02);
+                  c3 = _mm512_4fmadd_ps(c3, b00, b10, b20, b30, a_base+0x03);
+
+                  a_base += 0x04;
+                  k += 4;
+
+                }
+
+                matrix_transpose_4x16(c0, c1, c2, c3);
+
+                float *c_base = C + j*m + i;
+
+                if (mask == 0xffff) {
+                  __m128 p0_0 = _mm_load_ps(c_base + 0x0 * m);
+                  __m128 p0_1 = _mm_load_ps(c_base + 0x1 * m);
+                  __m128 p0_2 = _mm_load_ps(c_base + 0x2 * m);
+                  __m128 p0_3 = _mm_load_ps(c_base + 0x3 * m);
+                  __m128 p1_0 = _mm_load_ps(c_base + 0x4 * m);
+                  __m128 p1_1 = _mm_load_ps(c_base + 0x5 * m);
+                  __m128 p1_2 = _mm_load_ps(c_base + 0x6 * m);
+                  __m128 p1_3 = _mm_load_ps(c_base + 0x7 * m);
+                  __m128 p2_0 = _mm_load_ps(c_base + 0x8 * m);
+                  __m128 p2_1 = _mm_load_ps(c_base + 0x9 * m);
+                  __m128 p2_2 = _mm_load_ps(c_base + 0xa * m);
+                  __m128 p2_3 = _mm_load_ps(c_base + 0xb * m);
+                  __m128 p3_0 = _mm_load_ps(c_base + 0xc * m);
+                  __m128 p3_1 = _mm_load_ps(c_base + 0xd * m);
+                  __m128 p3_2 = _mm_load_ps(c_base + 0xe * m);
+                  __m128 p3_3 = _mm_load_ps(c_base + 0xf * m);
+
+                  __m128 c0_0 = _mm512_extractf32x4_ps(c0, 0);
+                  __m128 c0_1 = _mm512_extractf32x4_ps(c0, 1);
+                  __m128 c0_2 = _mm512_extractf32x4_ps(c0, 2);
+                  __m128 c0_3 = _mm512_extractf32x4_ps(c0, 3);
+                  __m128 c1_0 = _mm512_extractf32x4_ps(c1, 0);
+                  __m128 c1_1 = _mm512_extractf32x4_ps(c1, 1);
+                  __m128 c1_2 = _mm512_extractf32x4_ps(c1, 2);
+                  __m128 c1_3 = _mm512_extractf32x4_ps(c1, 3);
+                  __m128 c2_0 = _mm512_extractf32x4_ps(c2, 0);
+                  __m128 c2_1 = _mm512_extractf32x4_ps(c2, 1);
+                  __m128 c2_2 = _mm512_extractf32x4_ps(c2, 2);
+                  __m128 c2_3 = _mm512_extractf32x4_ps(c2, 3);
+                  __m128 c3_0 = _mm512_extractf32x4_ps(c3, 0);
+                  __m128 c3_1 = _mm512_extractf32x4_ps(c3, 1);
+                  __m128 c3_2 = _mm512_extractf32x4_ps(c3, 2);
+                  __m128 c3_3 = _mm512_extractf32x4_ps(c3, 3);
+
+                  c0_0 = _mm_add_ps(c0_0, p0_0);
+                  c0_1 = _mm_add_ps(c0_1, p0_1);
+                  c0_2 = _mm_add_ps(c0_2, p0_2);
+                  c0_3 = _mm_add_ps(c0_3, p0_3);
+                  c1_0 = _mm_add_ps(c1_0, p1_0);
+                  c1_1 = _mm_add_ps(c1_1, p1_1);
+                  c1_2 = _mm_add_ps(c1_2, p1_2);
+                  c1_3 = _mm_add_ps(c1_3, p1_3);
+                  c2_0 = _mm_add_ps(c2_0, p2_0);
+                  c2_1 = _mm_add_ps(c2_1, p2_1);
+                  c2_2 = _mm_add_ps(c2_2, p2_2);
+                  c2_3 = _mm_add_ps(c2_3, p2_3);
+                  c3_0 = _mm_add_ps(c3_0, p3_0);
+                  c3_1 = _mm_add_ps(c3_1, p3_1);
+                  c3_2 = _mm_add_ps(c3_2, p3_2);
+                  c3_3 = _mm_add_ps(c3_3, p3_3);
+
+                  _mm_store_ps(c_base + 0x0 * m, c0_0);
+                  _mm_store_ps(c_base + 0x1 * m, c0_1);
+                  _mm_store_ps(c_base + 0x2 * m, c0_2);
+                  _mm_store_ps(c_base + 0x3 * m, c0_3);
+                  _mm_store_ps(c_base + 0x4 * m, c1_0);
+                  _mm_store_ps(c_base + 0x5 * m, c1_1);
+                  _mm_store_ps(c_base + 0x6 * m, c1_2);
+                  _mm_store_ps(c_base + 0x7 * m, c1_3);
+                  _mm_store_ps(c_base + 0x8 * m, c2_0);
+                  _mm_store_ps(c_base + 0x9 * m, c2_1);
+                  _mm_store_ps(c_base + 0xa * m, c2_2);
+                  _mm_store_ps(c_base + 0xb * m, c2_3);
+                  _mm_store_ps(c_base + 0xc * m, c3_0);
+                  _mm_store_ps(c_base + 0xd * m, c3_1);
+                  _mm_store_ps(c_base + 0xe * m, c3_2);
+                  _mm_store_ps(c_base + 0xf * m, c3_3);
+
+                } else if (mask == 0xfff) {
+                  __m128 p0_0 = _mm_load_ps(c_base + 0x0 * m);
+                  __m128 p0_1 = _mm_load_ps(c_base + 0x1 * m);
+                  __m128 p0_2 = _mm_load_ps(c_base + 0x2 * m);
+                  __m128 p0_3 = _mm_load_ps(c_base + 0x3 * m);
+                  __m128 p1_0 = _mm_load_ps(c_base + 0x4 * m);
+                  __m128 p1_1 = _mm_load_ps(c_base + 0x5 * m);
+                  __m128 p1_2 = _mm_load_ps(c_base + 0x6 * m);
+                  __m128 p1_3 = _mm_load_ps(c_base + 0x7 * m);
+                  __m128 p2_0 = _mm_load_ps(c_base + 0x8 * m);
+                  __m128 p2_1 = _mm_load_ps(c_base + 0x9 * m);
+                  __m128 p2_2 = _mm_load_ps(c_base + 0xa * m);
+                  __m128 p2_3 = _mm_load_ps(c_base + 0xb * m);
+
+                  __m128 c0_0 = _mm512_extractf32x4_ps(c0, 0);
+                  __m128 c0_1 = _mm512_extractf32x4_ps(c0, 1);
+                  __m128 c0_2 = _mm512_extractf32x4_ps(c0, 2);
+                  __m128 c0_3 = _mm512_extractf32x4_ps(c0, 3);
+                  __m128 c1_0 = _mm512_extractf32x4_ps(c1, 0);
+                  __m128 c1_1 = _mm512_extractf32x4_ps(c1, 1);
+                  __m128 c1_2 = _mm512_extractf32x4_ps(c1, 2);
+                  __m128 c1_3 = _mm512_extractf32x4_ps(c1, 3);
+                  __m128 c2_0 = _mm512_extractf32x4_ps(c2, 0);
+                  __m128 c2_1 = _mm512_extractf32x4_ps(c2, 1);
+                  __m128 c2_2 = _mm512_extractf32x4_ps(c2, 2);
+                  __m128 c2_3 = _mm512_extractf32x4_ps(c2, 3);
+
+                  c0_0 = _mm_add_ps(c0_0, p0_0);
+                  c0_1 = _mm_add_ps(c0_1, p0_1);
+                  c0_2 = _mm_add_ps(c0_2, p0_2);
+                  c0_3 = _mm_add_ps(c0_3, p0_3);
+                  c1_0 = _mm_add_ps(c1_0, p1_0);
+                  c1_1 = _mm_add_ps(c1_1, p1_1);
+                  c1_2 = _mm_add_ps(c1_2, p1_2);
+                  c1_3 = _mm_add_ps(c1_3, p1_3);
+                  c2_0 = _mm_add_ps(c2_0, p2_0);
+                  c2_1 = _mm_add_ps(c2_1, p2_1);
+                  c2_2 = _mm_add_ps(c2_2, p2_2);
+                  c2_3 = _mm_add_ps(c2_3, p2_3);
+
+                  _mm_store_ps(c_base + 0x0 * m, c0_0);
+                  _mm_store_ps(c_base + 0x1 * m, c0_1);
+                  _mm_store_ps(c_base + 0x2 * m, c0_2);
+                  _mm_store_ps(c_base + 0x3 * m, c0_3);
+                  _mm_store_ps(c_base + 0x4 * m, c1_0);
+                  _mm_store_ps(c_base + 0x5 * m, c1_1);
+                  _mm_store_ps(c_base + 0x6 * m, c1_2);
+                  _mm_store_ps(c_base + 0x7 * m, c1_3);
+                  _mm_store_ps(c_base + 0x8 * m, c2_0);
+                  _mm_store_ps(c_base + 0x9 * m, c2_1);
+                  _mm_store_ps(c_base + 0xa * m, c2_2);
+                  _mm_store_ps(c_base + 0xb * m, c2_3);
+
+                } else if (mask == 0xf) {
+                  __m128 c0_0, c0_1, c0_2, c0_3;
+                  __m128 p0_0, p0_1, p0_2, p0_3;
+
+                  p0_0 = _mm_load_ps(c_base + 0x0 * m);
+                  p0_1 = _mm_load_ps(c_base + 0x1 * m);
+                  p0_2 = _mm_load_ps(c_base + 0x2 * m);
+                  p0_3 = _mm_load_ps(c_base + 0x3 * m);
+
+                  c0_0 = _mm512_extractf32x4_ps(c0, 0);
+                  c0_1 = _mm512_extractf32x4_ps(c0, 1);
+                  c0_2 = _mm512_extractf32x4_ps(c0, 2);
+                  c0_3 = _mm512_extractf32x4_ps(c0, 3);
+
+                  c0_0 = _mm_add_ps(c0_0, p0_0);
+                  c0_1 = _mm_add_ps(c0_1, p0_1);
+                  c0_2 = _mm_add_ps(c0_2, p0_2);
+                  c0_3 = _mm_add_ps(c0_3, p0_3);
+
+
+                  _mm_store_ps(c_base + 0x0 * m, c0_0);
+                  _mm_store_ps(c_base + 0x1 * m, c0_1);
+                  _mm_store_ps(c_base + 0x2 * m, c0_2);
+                  _mm_store_ps(c_base + 0x3 * m, c0_3);
+
+                } else {
+                  assert(0);
+                }
+                i += 4;
+              } else if ((m - i) == 8 && ((i + 8) <= (ii + LI))) {
+                uint64_t k = 0;
+
+                __m128 *a_base = (__m128 *)(AT + i * ap);
+                __m512 c0 = _mm512_setzero_ps();
+                __m512 c1 = _mm512_setzero_ps();
+                __m512 c2 = _mm512_setzero_ps();
+                __m512 c3 = _mm512_setzero_ps();
+                __m512 c4 = _mm512_setzero_ps();
+                __m512 c5 = _mm512_setzero_ps();
+                __m512 c6 = _mm512_setzero_ps();
+                __m512 c7 = _mm512_setzero_ps();
+
+                for (k = 0; k < p; k = k + 16) {
+                  if (k + 16 > p) break;
+                  float *b_base = (float *)(B + k * n + j);
+
+                  __m512 b00 = _mm512_maskz_load_ps(mask, b_base + n*0x0);
+                  __m512 b10 = _mm512_maskz_load_ps(mask, b_base + n*0x1);
+                  __m512 b20 = _mm512_maskz_load_ps(mask, b_base + n*0x2);
+                  __m512 b30 = _mm512_maskz_load_ps(mask, b_base + n*0x3);
+                  __m512 b40 = _mm512_maskz_load_ps(mask, b_base + n*0x4);
+                  __m512 b50 = _mm512_maskz_load_ps(mask, b_base + n*0x5);
+                  __m512 b60 = _mm512_maskz_load_ps(mask, b_base + n*0x6);
+                  __m512 b70 = _mm512_maskz_load_ps(mask, b_base + n*0x7);
+                  __m512 b80 = _mm512_maskz_load_ps(mask, b_base + n*0x8);
+                  __m512 b90 = _mm512_maskz_load_ps(mask, b_base + n*0x9);
+                  __m512 ba0 = _mm512_maskz_load_ps(mask, b_base + n*0xa);
+                  __m512 bb0 = _mm512_maskz_load_ps(mask, b_base + n*0xb);
+                  __m512 bc0 = _mm512_maskz_load_ps(mask, b_base + n*0xc);
+                  __m512 bd0 = _mm512_maskz_load_ps(mask, b_base + n*0xd);
+                  __m512 be0 = _mm512_maskz_load_ps(mask, b_base + n*0xe);
+                  __m512 bf0 = _mm512_maskz_load_ps(mask, b_base + n*0xf);
+                
+                  c0 = _mm512_4fmadd_ps(c0, b00, b10, b20, b30, a_base+0x00);
+                  c1 = _mm512_4fmadd_ps(c1, b00, b10, b20, b30, a_base+0x01);
+                  c2 = _mm512_4fmadd_ps(c2, b00, b10, b20, b30, a_base+0x02);
+                  c3 = _mm512_4fmadd_ps(c3, b00, b10, b20, b30, a_base+0x03);
+                  c4 = _mm512_4fmadd_ps(c4, b00, b10, b20, b30, a_base+0x04);
+                  c5 = _mm512_4fmadd_ps(c5, b00, b10, b20, b30, a_base+0x05);
+                  c6 = _mm512_4fmadd_ps(c6, b00, b10, b20, b30, a_base+0x06);
+                  c7 = _mm512_4fmadd_ps(c7, b00, b10, b20, b30, a_base+0x07);
+
+                  c0 = _mm512_4fmadd_ps(c0, b40, b50, b60, b70, a_base+0x08);
+                  c1 = _mm512_4fmadd_ps(c1, b40, b50, b60, b70, a_base+0x09);
+                  c2 = _mm512_4fmadd_ps(c2, b40, b50, b60, b70, a_base+0x0a);
+                  c3 = _mm512_4fmadd_ps(c3, b40, b50, b60, b70, a_base+0x0b);
+                  c4 = _mm512_4fmadd_ps(c4, b40, b50, b60, b70, a_base+0x0c);
+                  c5 = _mm512_4fmadd_ps(c5, b40, b50, b60, b70, a_base+0x0d);
+                  c6 = _mm512_4fmadd_ps(c6, b40, b50, b60, b70, a_base+0x0e);
+                  c7 = _mm512_4fmadd_ps(c7, b40, b50, b60, b70, a_base+0x0f);
+
+                  c0 = _mm512_4fmadd_ps(c0, b80, b90, ba0, bb0, a_base+0x10);
+                  c1 = _mm512_4fmadd_ps(c1, b80, b90, ba0, bb0, a_base+0x11);
+                  c2 = _mm512_4fmadd_ps(c2, b80, b90, ba0, bb0, a_base+0x12);
+                  c3 = _mm512_4fmadd_ps(c3, b80, b90, ba0, bb0, a_base+0x13);
+                  c4 = _mm512_4fmadd_ps(c4, b80, b90, ba0, bb0, a_base+0x14);
+                  c5 = _mm512_4fmadd_ps(c5, b80, b90, ba0, bb0, a_base+0x15);
+                  c6 = _mm512_4fmadd_ps(c6, b80, b90, ba0, bb0, a_base+0x16);
+                  c7 = _mm512_4fmadd_ps(c7, b80, b90, ba0, bb0, a_base+0x17);
+
+                  c0 = _mm512_4fmadd_ps(c0, bc0, bd0, be0, bf0, a_base+0x18);
+                  c1 = _mm512_4fmadd_ps(c1, bc0, bd0, be0, bf0, a_base+0x19);
+                  c2 = _mm512_4fmadd_ps(c2, bc0, bd0, be0, bf0, a_base+0x1a);
+                  c3 = _mm512_4fmadd_ps(c3, bc0, bd0, be0, bf0, a_base+0x1b);
+                  c4 = _mm512_4fmadd_ps(c4, bc0, bd0, be0, bf0, a_base+0x1c);
+                  c5 = _mm512_4fmadd_ps(c5, bc0, bd0, be0, bf0, a_base+0x1d);
+                  c6 = _mm512_4fmadd_ps(c6, bc0, bd0, be0, bf0, a_base+0x1e);
+                  c7 = _mm512_4fmadd_ps(c7, bc0, bd0, be0, bf0, a_base+0x1f);
+
+                  a_base += 0x20;
+                }
+
+
+                if (k + 8 <= p) {
+                  float *b_base = (float *)(B + k * n + j);
+
+                  __m512 b00 = _mm512_maskz_load_ps(mask, b_base + n*0x0);
+                  __m512 b10 = _mm512_maskz_load_ps(mask, b_base + n*0x1);
+                  __m512 b20 = _mm512_maskz_load_ps(mask, b_base + n*0x2);
+                  __m512 b30 = _mm512_maskz_load_ps(mask, b_base + n*0x3);
+                  __m512 b40 = _mm512_maskz_load_ps(mask, b_base + n*0x4);
+                  __m512 b50 = _mm512_maskz_load_ps(mask, b_base + n*0x5);
+                  __m512 b60 = _mm512_maskz_load_ps(mask, b_base + n*0x6);
+                  __m512 b70 = _mm512_maskz_load_ps(mask, b_base + n*0x7);
+
+                  c0 = _mm512_4fmadd_ps(c0, b00, b10, b20, b30, a_base+0x00);
+                  c1 = _mm512_4fmadd_ps(c1, b00, b10, b20, b30, a_base+0x01);
+                  c2 = _mm512_4fmadd_ps(c2, b00, b10, b20, b30, a_base+0x02);
+                  c3 = _mm512_4fmadd_ps(c3, b00, b10, b20, b30, a_base+0x03);
+                  c4 = _mm512_4fmadd_ps(c4, b00, b10, b20, b30, a_base+0x04);
+                  c5 = _mm512_4fmadd_ps(c5, b00, b10, b20, b30, a_base+0x05);
+                  c6 = _mm512_4fmadd_ps(c6, b00, b10, b20, b30, a_base+0x06);
+                  c7 = _mm512_4fmadd_ps(c7, b00, b10, b20, b30, a_base+0x07);
+
+                  c0 = _mm512_4fmadd_ps(c0, b40, b50, b60, b70, a_base+0x08);
+                  c1 = _mm512_4fmadd_ps(c1, b40, b50, b60, b70, a_base+0x09);
+                  c2 = _mm512_4fmadd_ps(c2, b40, b50, b60, b70, a_base+0x0a);
+                  c3 = _mm512_4fmadd_ps(c3, b40, b50, b60, b70, a_base+0x0b);
+                  c4 = _mm512_4fmadd_ps(c4, b40, b50, b60, b70, a_base+0x0c);
+                  c5 = _mm512_4fmadd_ps(c5, b40, b50, b60, b70, a_base+0x0d);
+                  c6 = _mm512_4fmadd_ps(c6, b40, b50, b60, b70, a_base+0x0e);
+                  c7 = _mm512_4fmadd_ps(c7, b40, b50, b60, b70, a_base+0x0f);
+
+                  a_base += 0x10;
+                  k += 8;
+                }
+
+                if (k + 4 <= p) {
+
+                  float *b_base = (float *)(B + k * n + j);
+
+                  __m512 b00 = _mm512_maskz_load_ps(mask, b_base + n*0x0);
+                  __m512 b10 = _mm512_maskz_load_ps(mask, b_base + n*0x1);
+                  __m512 b20 = _mm512_maskz_load_ps(mask, b_base + n*0x2);
+                  __m512 b30 = _mm512_maskz_load_ps(mask, b_base + n*0x3);
+
+                  c0 = _mm512_4fmadd_ps(c0, b00, b10, b20, b30, a_base+0x00);
+                  c1 = _mm512_4fmadd_ps(c1, b00, b10, b20, b30, a_base+0x01);
+                  c2 = _mm512_4fmadd_ps(c2, b00, b10, b20, b30, a_base+0x02);
+                  c3 = _mm512_4fmadd_ps(c3, b00, b10, b20, b30, a_base+0x03);
+                  c4 = _mm512_4fmadd_ps(c4, b00, b10, b20, b30, a_base+0x04);
+                  c5 = _mm512_4fmadd_ps(c5, b00, b10, b20, b30, a_base+0x05);
+                  c6 = _mm512_4fmadd_ps(c6, b00, b10, b20, b30, a_base+0x06);
+                  c7 = _mm512_4fmadd_ps(c7, b00, b10, b20, b30, a_base+0x07);
+
+                  a_base += 0x08;
+                  k += 4;
+                }
+
+                if (k < p) {
+
+                  float *b_base = (float *)(B + k * n + j);
+
+                  __m512 b00 = _mm512_setzero_ps();
+                  __m512 b10 = _mm512_setzero_ps();
+                  __m512 b20 = _mm512_setzero_ps();
+                  __m512 b30 = _mm512_setzero_ps();
+
+                  if (k + 0 < p) b00 = _mm512_maskz_load_ps(mask, b_base + n*0x0);
+                  if (k + 1 < p) b10 = _mm512_maskz_load_ps(mask, b_base + n*0x1);
+                  if (k + 2 < p) b20 = _mm512_maskz_load_ps(mask, b_base + n*0x2);
+                  if (k + 3 < p) b30 = _mm512_maskz_load_ps(mask, b_base + n*0x3);
+
+                  c0 = _mm512_4fmadd_ps(c0, b00, b10, b20, b30, a_base+0x00);
+                  c1 = _mm512_4fmadd_ps(c1, b00, b10, b20, b30, a_base+0x01);
+                  c2 = _mm512_4fmadd_ps(c2, b00, b10, b20, b30, a_base+0x02);
+                  c3 = _mm512_4fmadd_ps(c3, b00, b10, b20, b30, a_base+0x03);
+                  c4 = _mm512_4fmadd_ps(c4, b00, b10, b20, b30, a_base+0x04);
+                  c5 = _mm512_4fmadd_ps(c5, b00, b10, b20, b30, a_base+0x05);
+                  c6 = _mm512_4fmadd_ps(c6, b00, b10, b20, b30, a_base+0x06);
+                  c7 = _mm512_4fmadd_ps(c7, b00, b10, b20, b30, a_base+0x07);
+
+                  a_base += 0x08;
+                  k += 4;
+                }
+
+                matrix_transpose_8x16(c0, c1, c2, c3, c4, c5, c6, c7);
+
+                float *c_base = C + j*m + i;
+
+                if (mask == 0xffff) {
+                  __m512 p0_0 = _mm512_maskz_load_ps(0xff, c_base + 0x0 * m);
+                  __m512 p0_1 = _mm512_maskz_load_ps(0xff00, c_base + 0x4 * m - 0x08);
+                  __m512 p1_0 = _mm512_maskz_load_ps(0xff, c_base + 0x1 * m);
+                  __m512 p1_1 = _mm512_maskz_load_ps(0xff00, c_base + 0x5 * m - 0x08);
+                  __m512 p2_0 = _mm512_maskz_load_ps(0xff, c_base + 0x2 * m);
+                  __m512 p2_1 = _mm512_maskz_load_ps(0xff00, c_base + 0x6 * m - 0x08);
+                  __m512 p3_0 = _mm512_maskz_load_ps(0xff, c_base + 0x3 * m);
+                  __m512 p3_1 = _mm512_maskz_load_ps(0xff00, c_base + 0x7 * m - 0x08);
+                  __m512 p4_0 = _mm512_maskz_load_ps(0xff, c_base + 0x8 * m);
+                  __m512 p4_1 = _mm512_maskz_load_ps(0xff00, c_base + 0xc * m - 0x08);
+                  __m512 p5_0 = _mm512_maskz_load_ps(0xff, c_base + 0x9 * m);
+                  __m512 p5_1 = _mm512_maskz_load_ps(0xff00, c_base + 0xd * m - 0x08);
+                  __m512 p6_0 = _mm512_maskz_load_ps(0xff, c_base + 0xa * m);
+                  __m512 p6_1 = _mm512_maskz_load_ps(0xff00, c_base + 0xe * m - 0x08);
+                  __m512 p7_0 = _mm512_maskz_load_ps(0xff, c_base + 0xb * m);
+                  __m512 p7_1 = _mm512_maskz_load_ps(0xff00, c_base + 0xf * m - 0x08);
+
+                  __m512 c0_0 = _mm512_maskz_mov_ps(0x00ff, c0);
+                  __m512 c0_1 = _mm512_maskz_mov_ps(0xff00, c0);
+                  __m512 c1_0 = _mm512_maskz_mov_ps(0x00ff, c1);
+                  __m512 c1_1 = _mm512_maskz_mov_ps(0xff00, c1);
+                  __m512 c2_0 = _mm512_maskz_mov_ps(0x00ff, c2);
+                  __m512 c2_1 = _mm512_maskz_mov_ps(0xff00, c2);
+                  __m512 c3_0 = _mm512_maskz_mov_ps(0x00ff, c3);
+                  __m512 c3_1 = _mm512_maskz_mov_ps(0xff00, c3);
+                  __m512 c4_0 = _mm512_maskz_mov_ps(0x00ff, c4);
+                  __m512 c4_1 = _mm512_maskz_mov_ps(0xff00, c4);
+                  __m512 c5_0 = _mm512_maskz_mov_ps(0x00ff, c5);
+                  __m512 c5_1 = _mm512_maskz_mov_ps(0xff00, c5);
+                  __m512 c6_0 = _mm512_maskz_mov_ps(0x00ff, c6);
+                  __m512 c6_1 = _mm512_maskz_mov_ps(0xff00, c6);
+                  __m512 c7_0 = _mm512_maskz_mov_ps(0x00ff, c7);
+                  __m512 c7_1 = _mm512_maskz_mov_ps(0xff00, c7);
+
+                  c0_0 = _mm512_add_ps(c0_0, p0_0);
+                  c0_1 = _mm512_add_ps(c0_1, p0_1);
+                  c1_0 = _mm512_add_ps(c1_0, p1_0);
+                  c1_1 = _mm512_add_ps(c1_1, p1_1);
+                  c2_0 = _mm512_add_ps(c2_0, p2_0);
+                  c2_1 = _mm512_add_ps(c2_1, p2_1);
+                  c3_0 = _mm512_add_ps(c3_0, p3_0);
+                  c3_1 = _mm512_add_ps(c3_1, p3_1);
+                  c4_0 = _mm512_add_ps(c4_0, p4_0);
+                  c4_1 = _mm512_add_ps(c4_1, p4_1);
+                  c5_0 = _mm512_add_ps(c5_0, p5_0);
+                  c5_1 = _mm512_add_ps(c5_1, p5_1);
+                  c6_0 = _mm512_add_ps(c6_0, p6_0);
+                  c6_1 = _mm512_add_ps(c6_1, p6_1);
+                  c7_0 = _mm512_add_ps(c7_0, p7_0);
+                  c7_1 = _mm512_add_ps(c7_1, p7_1);
+
+                  _mm512_mask_store_ps(c_base + 0x0 * m, 0x00ff, c0_0);
+                  _mm512_mask_store_ps(c_base + 0x1 * m, 0x00ff, c1_0);
+                  _mm512_mask_store_ps(c_base + 0x2 * m, 0x00ff, c2_0);
+                  _mm512_mask_store_ps(c_base + 0x3 * m, 0x00ff, c3_0);
+                  _mm512_mask_store_ps(c_base + 0x4 * m - 0x08, 0xff00, c0_1);
+                  _mm512_mask_store_ps(c_base + 0x5 * m - 0x08, 0xff00, c1_1);
+                  _mm512_mask_store_ps(c_base + 0x6 * m - 0x08, 0xff00, c2_1);
+                  _mm512_mask_store_ps(c_base + 0x7 * m - 0x08, 0xff00, c3_1);
+
+                  _mm512_mask_store_ps(c_base + 0x8 * m, 0x00ff, c4_0);
+                  _mm512_mask_store_ps(c_base + 0x9 * m, 0x00ff, c5_0);
+                  _mm512_mask_store_ps(c_base + 0xa * m, 0x00ff, c6_0);
+                  _mm512_mask_store_ps(c_base + 0xb * m, 0x00ff, c7_0);
+                  _mm512_mask_store_ps(c_base + 0xc * m - 0x08, 0xff00, c4_1);
+                  _mm512_mask_store_ps(c_base + 0xd * m - 0x08, 0xff00, c5_1);
+                  _mm512_mask_store_ps(c_base + 0xe * m - 0x08, 0xff00, c6_1);
+                  _mm512_mask_store_ps(c_base + 0xf * m - 0x08, 0xff00, c7_1);
+                } else if (mask == 0xfff) {
+                  __m512 p0_0 = _mm512_maskz_load_ps(0xff, c_base + 0x0 * m);
+                  __m512 p0_1 = _mm512_maskz_load_ps(0xff00, c_base + 0x4 * m - 0x08);
+                  __m512 p1_0 = _mm512_maskz_load_ps(0xff, c_base + 0x1 * m);
+                  __m512 p1_1 = _mm512_maskz_load_ps(0xff00, c_base + 0x5 * m - 0x08);
+                  __m512 p2_0 = _mm512_maskz_load_ps(0xff, c_base + 0x2 * m);
+                  __m512 p2_1 = _mm512_maskz_load_ps(0xff00, c_base + 0x6 * m - 0x08);
+                  __m512 p3_0 = _mm512_maskz_load_ps(0xff, c_base + 0x3 * m);
+                  __m512 p3_1 = _mm512_maskz_load_ps(0xff00, c_base + 0x7 * m - 0x08);
+                  __m512 p4_0 = _mm512_maskz_load_ps(0xff, c_base + 0x8 * m);
+                  __m512 p5_0 = _mm512_maskz_load_ps(0xff, c_base + 0x9 * m);
+                  __m512 p6_0 = _mm512_maskz_load_ps(0xff, c_base + 0xa * m);
+                  __m512 p7_0 = _mm512_maskz_load_ps(0xff, c_base + 0xb * m);
+
+                  __m512 c0_0 = _mm512_maskz_mov_ps(0x00ff, c0);
+                  __m512 c0_1 = _mm512_maskz_mov_ps(0xff00, c0);
+                  __m512 c1_0 = _mm512_maskz_mov_ps(0x00ff, c1);
+                  __m512 c1_1 = _mm512_maskz_mov_ps(0xff00, c1);
+                  __m512 c2_0 = _mm512_maskz_mov_ps(0x00ff, c2);
+                  __m512 c2_1 = _mm512_maskz_mov_ps(0xff00, c2);
+                  __m512 c3_0 = _mm512_maskz_mov_ps(0x00ff, c3);
+                  __m512 c3_1 = _mm512_maskz_mov_ps(0xff00, c3);
+                  __m512 c4_0 = _mm512_maskz_mov_ps(0x00ff, c4);
+                  __m512 c5_0 = _mm512_maskz_mov_ps(0x00ff, c5);
+                  __m512 c6_0 = _mm512_maskz_mov_ps(0x00ff, c6);
+                  __m512 c7_0 = _mm512_maskz_mov_ps(0x00ff, c7);
+
+                  c0_0 = _mm512_add_ps(c0_0, p0_0);
+                  c0_1 = _mm512_add_ps(c0_1, p0_1);
+                  c1_0 = _mm512_add_ps(c1_0, p1_0);
+                  c1_1 = _mm512_add_ps(c1_1, p1_1);
+                  c2_0 = _mm512_add_ps(c2_0, p2_0);
+                  c2_1 = _mm512_add_ps(c2_1, p2_1);
+                  c3_0 = _mm512_add_ps(c3_0, p3_0);
+                  c3_1 = _mm512_add_ps(c3_1, p3_1);
+                  c4_0 = _mm512_add_ps(c4_0, p4_0);
+                  c5_0 = _mm512_add_ps(c5_0, p5_0);
+                  c6_0 = _mm512_add_ps(c6_0, p6_0);
+                  c7_0 = _mm512_add_ps(c7_0, p7_0);
+
+                  _mm512_mask_store_ps(c_base + 0x0 * m, 0x00ff, c0_0);
+                  _mm512_mask_store_ps(c_base + 0x1 * m, 0x00ff, c1_0);
+                  _mm512_mask_store_ps(c_base + 0x2 * m, 0x00ff, c2_0);
+                  _mm512_mask_store_ps(c_base + 0x3 * m, 0x00ff, c3_0);
+                  _mm512_mask_store_ps(c_base + 0x4 * m - 0x08, 0xff00, c0_1);
+                  _mm512_mask_store_ps(c_base + 0x5 * m - 0x08, 0xff00, c1_1);
+                  _mm512_mask_store_ps(c_base + 0x6 * m - 0x08, 0xff00, c2_1);
+                  _mm512_mask_store_ps(c_base + 0x7 * m - 0x08, 0xff00, c3_1);
+
+                  _mm512_mask_store_ps(c_base + 0x8 * m, 0x00ff, c4_0);
+                  _mm512_mask_store_ps(c_base + 0x9 * m, 0x00ff, c5_0);
+                  _mm512_mask_store_ps(c_base + 0xa * m, 0x00ff, c6_0);
+                  _mm512_mask_store_ps(c_base + 0xb * m, 0x00ff, c7_0);
+
+                } else if (mask == 0xf) {
+
+                  __m512 p0_0 = _mm512_maskz_load_ps(0xff, c_base + 0x0 * m);
+                  __m512 p1_0 = _mm512_maskz_load_ps(0xff, c_base + 0x1 * m);
+                  __m512 p2_0 = _mm512_maskz_load_ps(0xff, c_base + 0x2 * m);
+                  __m512 p3_0 = _mm512_maskz_load_ps(0xff, c_base + 0x3 * m);
+
+                  __m512 c0_0 = _mm512_maskz_mov_ps(0x00ff, c0);
+                  __m512 c1_0 = _mm512_maskz_mov_ps(0x00ff, c1);
+                  __m512 c2_0 = _mm512_maskz_mov_ps(0x00ff, c2);
+                  __m512 c3_0 = _mm512_maskz_mov_ps(0x00ff, c3);
+
+                  c0_0 = _mm512_add_ps(c0_0, p0_0);
+                  c1_0 = _mm512_add_ps(c1_0, p1_0);
+                  c2_0 = _mm512_add_ps(c2_0, p2_0);
+                  c3_0 = _mm512_add_ps(c3_0, p3_0);
+
+                  _mm512_mask_store_ps(c_base + 0x0 * m, 0x00ff, c0_0);
+                  _mm512_mask_store_ps(c_base + 0x1 * m, 0x00ff, c1_0);
+                  _mm512_mask_store_ps(c_base + 0x2 * m, 0x00ff, c2_0);
+                  _mm512_mask_store_ps(c_base + 0x3 * m, 0x00ff, c3_0);
+
+                } else {
+                  assert(0);
+                }
+                i += 8;
+              }
+
+            }
+          }
+        }
+      }
+    }
+  }
+  mkl_free(AT);
+}
+
+void sgemm3_opt(char* pTransA, char* pTransB,
+      const int* pM, const int* pN, const int* pK,
+      const float *pAlpha, const float *pa, const int*plda,
+      const float *pb, const int *pldb, const float *pBeta,
+      float *pc, const int*pldc)
+{
+  const uint64_t m = *pM;
+  const uint64_t n = *pN;
+  const uint64_t p = *pK;
+
+  const float *A = pa;
+  const float *B = pb;
+  float *C = pc;
+
+  const float alpha = *pAlpha;
+  const float beta  = *pBeta;
+
+  assert(*pTransA == 'n' && *pTransB == 't');
+  assert((m == 500 || m == 1000) && (n == 35820 || n == 50004) && p <= 64);
+  assert(alpha == 1.0f && beta == 1.0f);
+  assert((*pM == *plda) && (*pN == *pldb) && (*pM == *pldc));
+
+  sgemm_opt(m, n, p, alpha, A, B, beta, C);
+}
+
+
