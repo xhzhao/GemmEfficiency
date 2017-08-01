@@ -237,7 +237,6 @@ sgemm_opt(uint64_t m, uint64_t n, uint64_t p,
   uint64_t LI = 0;
   uint64_t LJ = 0;
 
-//p = 64;
 #define TNUM (72)
 #pragma omp parallel num_threads(TNUM)
   {
@@ -247,7 +246,6 @@ sgemm_opt(uint64_t m, uint64_t n, uint64_t p,
     uint64_t block_id_i = 0;
     uint64_t thread_size_i = 0;
 
-#if 1
     if (n == 50004) {
       thread_size_j = 704;
       block_id_j = tid;
@@ -268,64 +266,7 @@ sgemm_opt(uint64_t m, uint64_t n, uint64_t p,
       LJJ = 512;
       LI = 64;
       LJ = 64;
-    } else if (n == 2000) {
-      if (m == 500) {
-        thread_size_j = 32;
-        block_id_j = tid;
-        thread_size_i = m;
-        block_id_i = 0;
-
-        LII = 500;
-        LJJ = 32;
-        LI = 64;
-        LJ = 32;
-      } else if (m == 1000) {
-        thread_size_j = 64;
-        block_id_j = tid & 0x1f;
-        thread_size_i = 512;
-        block_id_i = (tid >> 5);
-
-        LII = 512;
-        LJJ = 32;
-        LI = 64;
-        LJ = 32;
-      }
-      if (tid >= 64) thread_size_j = 0;
-    } else if (n == 500) {
-      if (m == 500) {
-        thread_size_j = 64;
-        block_id_j = tid & 0x7;
-        thread_size_i = 64;
-        block_id_i = (tid >> 3);
-
-        LII = 64;
-        LJJ = 64;
-        LI = 64;
-        LJ = 32;
-      } else if (m == 1000) {
-        thread_size_j = 64;
-        block_id_j = tid & 0x7;
-        thread_size_i = 128;
-        block_id_i = (tid >> 3);
-
-        LII = 128;
-        LJJ = 64;
-        LI = 64;
-        LJ = 32;
-      }
-      if (tid >= 64) thread_size_j = 0;
     }
-#else
-    thread_size_j = n;
-    block_id_j = tid;
-    thread_size_i = m;
-    block_id_i = 0;
-
-    LII = 16;
-    LJJ = 16;
-    LI = 16;
-    LJ = 16;
-#endif
 
     /* m=500; n=50004; p=64; */
     for (uint64_t tid_j = 0; tid_j < thread_size_j; tid_j += LJJ) {
