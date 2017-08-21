@@ -15,10 +15,15 @@
 //get the system time in ms
 double get_time(void)
 {
+/*
     struct timeval start;
     gettimeofday(&start,NULL);
     double time = start.tv_sec * 1000 + start.tv_usec /1000;
     return time; 
+*/
+    double time = dsecnd() * 1000;
+    return time;
+
 }
 
 extern void sgemm_(char*, char*, const int*, const int*, const int*, const float *, const float *, const int*, const float *, const int*, const float *, float *, const int*);
@@ -194,7 +199,7 @@ int main(void)
 
 
 
-#if 0
+#if 1
     transa='t'; transb='n'; m=35820; n=64; k=500; lda=500; alpha=1.0000; ldb=500; beta=0.0000; ldc=35820;
     sgemm_main(1, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
     transa='n'; transb='n'; m=500; n=64; k=35820; lda=500; alpha=1.0000; ldb=35820; beta=0.0000; ldc=500;
