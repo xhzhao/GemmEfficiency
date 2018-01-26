@@ -5,16 +5,16 @@
 #include <mkl.h>
 
 
-#define SGEMM_COUNT 1000		    // every sgemm iteration numbers
+#define SGEMM_COUNT 3000		    // every sgemm iteration numbers
 #define HW_GFLOPS   3097 
 
 //get the system time in ms
 double get_time(void)
 {
-    struct timeval start;
-    gettimeofday(&start,NULL);
-    double time = start.tv_sec * 1000 + start.tv_usec /1000;
-    return time; 
+
+    double time = dsecnd() * 1000;
+    return time;
+
 }
 
 extern void sgemm_(char*, char*, const int*, const int*, const int*, const float *, const float *, const int*, const float *, const int*, const float *, float *, const int*);
@@ -28,13 +28,18 @@ void sgemm_profile(char* pTransA, char* pTransB, const int* pM, const int* pN, c
     float N = *pN;
     float K = *pK;
     double gflops = (M*N*K*2 + 2*M*N ) * (1e-6);
+    int transa = CblasNoTrans;
+    int transb = CblasNoTrans;
 
-    cblas_sgemm(CblasRowMajor,CblasNoTrans,CblasNoTrans, *pM, *pN, *pK, *pAlpha, pa, *plda, pb, *pldb, *pBeta, pc, *pldc);
+    if( *pTransB == 't'){
+        transb = CblasTrans;
+    }
+    cblas_sgemm(CblasRowMajor,transa,transb, *pM, *pN, *pK, *pAlpha, pa, *plda, pb, *pldb, *pBeta, pc, *pldc);
     double t0 = get_time();
     for(i=0; i < SGEMM_COUNT; i++)
     {
         //sgemm_(pTransA, pTransB, pM, pN, pK, pAlpha, pa, plda, pb, pldb, pBeta, pc, pldc);
-        cblas_sgemm(CblasRowMajor,CblasNoTrans,CblasNoTrans, *pM, *pN, *pK, *pAlpha, pa, *plda, pb, *pldb, *pBeta, pc, *pldc);
+        cblas_sgemm(CblasRowMajor, transa, transb, *pM, *pN, *pK, *pAlpha, pa, *plda, pb, *pldb, *pBeta, pc, *pldc);
     }
     double t1 = get_time() - t0;
     double avg_time = t1/SGEMM_COUNT;
@@ -66,7 +71,7 @@ void sgemm_profile_pack(char* pTransA, char* pTransB, const int* pM, const int* 
 
 float* matrix_init(int A, int B)
 {
-    float * p = malloc(A*B*sizeof(float));
+    float * p = mkl_malloc(A*B*sizeof(float), 64);
     int a,b;
     for(a=0; a < A; a++)
         for(b=0; b < B;b++)
@@ -83,9 +88,9 @@ void sgemm_main(int index, char transa, char transb, int M, int N, int K, int ld
     printf("----------GEMM %d----------\n", index);
     sgemm_profile(&transa, &transb, &M, &N, &K, &alpha, a, &lda, b, &ldb, &beta, c, &ldc);
     sgemm_profile_pack(&transa, &transb, &M, &N, &K, &alpha, a, &lda, b, &ldb, &beta, c, &ldc);
-    free(a);
-    free(b);
-    free(c);
+    mkl_free(a);
+    mkl_free(b);
+    mkl_free(c);
 }
 
 
@@ -96,17 +101,19 @@ int main(void)
     int m,n,k,lda,ldb,ldc;
     float alpha,beta;
   //BDW
-    transa='n'; transb='n'; m=16384; n=128; k=8194; lda=k; alpha=1.0000; ldb=n; beta=0.0000; ldc=n;
+    transa='n'; transb='n'; m=20; n=2400; k=800; lda=k; alpha=1.0000; ldb=n; beta=0.0000; ldc=n;
     sgemm_main(1, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
-    transa='n'; transb='n'; m=128; n=16384; k=4096; lda=k; alpha=1.0000; ldb=n; beta=0.0000; ldc=n;
+    transa='n'; transb='t'; m=20; n=2400; k=800; lda=k; alpha=1.0000; ldb=k; beta=0.0000; ldc=n;
     sgemm_main(2, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
-    transa='n'; transb='n'; m=16384; n=64; k=8194; lda=k; alpha=1.0000; ldb=n; beta=0.0000; ldc=n;
+
+    transa='n'; transb='n'; m=1000; n=2400; k=800; lda=k; alpha=1.0000; ldb=n; beta=0.0000; ldc=n;
     sgemm_main(3, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
-    transa='n'; transb='n'; m=64; n=16384; k=4096; lda=k; alpha=1.0000; ldb=n; beta=0.0000; ldc=n;
+    transa='n'; transb='t'; m=1000; n=2400; k=800; lda=k; alpha=1.0000; ldb=k; beta=0.0000; ldc=n;
     sgemm_main(4, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
-    transa='n'; transb='n'; m=2000; n=64; k=1002; lda=k; alpha=1.0000; ldb=n; beta=0.0000; ldc=n;
+
+    transa='n'; transb='n'; m=4000; n=2400; k=800; lda=k; alpha=1.0000; ldb=n; beta=0.0000; ldc=n;
     sgemm_main(5, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
-    transa='n'; transb='n'; m=64; n=2000; k=500; lda=k; alpha=1.0000; ldb=n; beta=0.0000; ldc=n;
+    transa='n'; transb='t'; m=4000; n=2400; k=800; lda=k; alpha=1.0000; ldb=k; beta=0.0000; ldc=n;
     sgemm_main(6, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
 
 /*  //KNL
