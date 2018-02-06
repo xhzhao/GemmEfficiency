@@ -7,7 +7,7 @@
 
 #define SGEMM_COUNT 3000		    // every sgemm iteration numbers
 #define HW_GFLOPS   3097 
-
+float* matrix_init(int A, int B);
 //get the system time in ms
 double get_time(void)
 {
@@ -69,10 +69,63 @@ void sgemm_profile_pack(char* pTransA, char* pTransB, const int* pM, const int* 
     cblas_sgemm_free(Ap);
 }
 
+void sgemm_profile_batch(int batchsize, char* pTransA, char* pTransB, const int* pM, const int* pN, const int* pK, const float *pAlpha, const int*plda, const int *pldb, const float *pBeta, const int*pldc) {
+    int m[1] = {*pM};
+    int n[1] = {*pN};
+    int k[1] = {*pK};
+        
+    int lda[1] = {*plda};
+    int ldb[1] = {*pldb};
+    int ldc[1] = {*pldc};
+        
+    CBLAS_TRANSPOSE transA[1];
+    CBLAS_TRANSPOSE transB[1];
+    transA[0] = (*pTransA == 'n')?CblasNoTrans:CblasTrans;
+    transB[0] = (*pTransB == 'n')?CblasNoTrans:CblasTrans;
+        
+    float alpha[1] = {*pAlpha}; 
+    float beta[1]  = {*pBeta};
+    int size_per_grp[1] = {batchsize};
+
+    //init a,b,c
+    float ** A = (float **) malloc(batchsize * sizeof(float *));
+    float ** B = (float **) malloc(batchsize * sizeof(float *));
+    float ** C = (float **) malloc(batchsize * sizeof(float *));
+    int i = 0;
+    for(i=0; i<batchsize; i++){
+        A[i] = matrix_init(*pM, *pK);
+        B[i] = matrix_init(*pK, *pN);
+        C[i] = matrix_init(*pM, *pN);
+    }
+    float M = *pM;                                                              
+    float N = *pN;                                                              
+    float K = *pK;
+    double gflops = batchsize * (M*N*K*2 + 2*M*N ) * (1e-6);
+    cblas_sgemm_batch(CblasRowMajor, transA, transB, m, n, k, alpha, A, lda, B, ldb, beta, C, ldc, 1, size_per_grp);
+
+    double t0 = get_time();                                                     
+    for(i=0; i < SGEMM_COUNT; i++)                                              
+    {
+        cblas_sgemm_batch(CblasRowMajor, transA, transB, m, n, k, alpha, A, lda, B, ldb, beta, C, ldc, 1, size_per_grp);
+    }                                                                           
+    double t1 = get_time() - t0;                                                
+    double avg_time = t1/SGEMM_COUNT; 
+    printf("sgemm_profile_batch end, avg time = %.2f, GFLOPS = %.2f\n", avg_time, gflops/avg_time);
+
+    
+    for(i=0; i<batchsize; i++){
+       mkl_free(A[i]); 
+       mkl_free(B[i]); 
+       mkl_free(C[i]); 
+    }
+}
+
+
 float* matrix_init(int A, int B)
 {
     float * p = mkl_malloc(A*B*sizeof(float), 64);
     int a,b;
+    #pragma omp parallel for collapse(2)
     for(a=0; a < A; a++)
         for(b=0; b < B;b++)
             p[a*B+b] = rand() % 1000; 
@@ -88,6 +141,7 @@ void sgemm_main(int index, char transa, char transb, int M, int N, int K, int ld
     printf("----------GEMM %d----------\n", index);
     sgemm_profile(&transa, &transb, &M, &N, &K, &alpha, a, &lda, b, &ldb, &beta, c, &ldc);
     sgemm_profile_pack(&transa, &transb, &M, &N, &K, &alpha, a, &lda, b, &ldb, &beta, c, &ldc);
+    sgemm_profile_batch(5, &transa, &transb, &M, &N, &K, &alpha, &lda, &ldb, &beta, &ldc);
     mkl_free(a);
     mkl_free(b);
     mkl_free(c);
@@ -103,17 +157,17 @@ int main(void)
   //BDW
     transa='n'; transb='n'; m=20; n=2400; k=800; lda=k; alpha=1.0000; ldb=n; beta=0.0000; ldc=n;
     sgemm_main(1, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
-    transa='n'; transb='t'; m=20; n=2400; k=800; lda=k; alpha=1.0000; ldb=k; beta=0.0000; ldc=n;
+    transa='n'; transb='n'; m=20; n=3200; k=800; lda=k; alpha=1.0000; ldb=n; beta=0.0000; ldc=n;
     sgemm_main(2, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
 
     transa='n'; transb='n'; m=1000; n=2400; k=800; lda=k; alpha=1.0000; ldb=n; beta=0.0000; ldc=n;
     sgemm_main(3, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
-    transa='n'; transb='t'; m=1000; n=2400; k=800; lda=k; alpha=1.0000; ldb=k; beta=0.0000; ldc=n;
+    transa='n'; transb='n'; m=1000; n=3200; k=800; lda=k; alpha=1.0000; ldb=n; beta=0.0000; ldc=n;
     sgemm_main(4, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
 
     transa='n'; transb='n'; m=4000; n=2400; k=800; lda=k; alpha=1.0000; ldb=n; beta=0.0000; ldc=n;
     sgemm_main(5, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
-    transa='n'; transb='t'; m=4000; n=2400; k=800; lda=k; alpha=1.0000; ldb=k; beta=0.0000; ldc=n;
+    transa='n'; transb='n'; m=4000; n=3200; k=800; lda=k; alpha=1.0000; ldb=n; beta=0.0000; ldc=n;
     sgemm_main(6, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
 
 /*  //KNL
