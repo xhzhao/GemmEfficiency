@@ -1,4 +1,4 @@
-CC=gcc
+CC=icc
 MKL_DNN_ROOT=/home/zhaoxiao/MKL/EnvCheck/MKL/mklml_lnx_2018.0.20170425
 
 
