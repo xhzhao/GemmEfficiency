@@ -6,7 +6,7 @@
 #include <pthread.h>
 
 #define WARM_UP     100
-#define SGEMM_COUNT 4096   // every sgemm iteration numbers
+#define SGEMM_COUNT 40960   // every sgemm iteration numbers
 
 float* matrix_init(int A, int B);
 //get the system time in ms
@@ -272,6 +272,7 @@ void sgemm_profile_2ompthread(char* pTransA, char* pTransB, const int* pM, const
         #pragma omp parallel for num_threads(2) proc_bind(spread)
         for(d = 0; d < 2; d++){
             mkl_set_num_threads_local(20);
+            //omp_set_nested(0);
             if(d == 0){
                 cblas_sgemm(CblasRowMajor, transa, transb, *pM, *pN, *pK, *pAlpha, pa, *plda, pb, *pldb, *pBeta, pc, *pldc);
             }else{
