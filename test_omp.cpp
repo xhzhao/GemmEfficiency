@@ -11,7 +11,7 @@
 #include <cstring>
 
 #define WARM_UP     100
-#define SGEMM_COUNT 1000   // every sgemm iteration numbers
+#define SGEMM_COUNT 10000   // every sgemm iteration numbers
 #define USE_VAR     1
 
 float* matrix_init(int A, int B);
@@ -452,7 +452,7 @@ int main()
     int m,n,k,lda,ldb,ldc;
     float alpha,beta;
 
-#if 1 
+#if 0
 
     var_main();
 
