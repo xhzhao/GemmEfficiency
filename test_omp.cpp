@@ -4,8 +4,13 @@
 #include <sys/time.h>
 #include <mkl.h>
 #include <pthread.h>
+#include <omp.h>
 
-#define WARM_UP     10
+#include <iostream>
+#include <cstdint>
+#include <cstring>
+
+#define WARM_UP     100
 #define SGEMM_COUNT 1000   // every sgemm iteration numbers
 #define USE_VAR     1
 
@@ -118,8 +123,8 @@ void sgemm_profile(char* pTransA, char* pTransB, const int* pM, const int* pN, c
     float N = *pN;
     float K = *pK;
     double gflops = (M*N*K*2 + 2*M*N ) * (1e-6);
-    int transa = CblasNoTrans;
-    int transb = CblasNoTrans;
+    CBLAS_TRANSPOSE  transa = CblasNoTrans;
+    CBLAS_TRANSPOSE  transb = CblasNoTrans;
 
     if( *pTransB == 't'){
         transb = CblasTrans;
@@ -262,8 +267,8 @@ void* thread_gemm(void * para){
     float N = *pN;
     float K = *pK;
     double gflops = (M*N*K*2 + 2*M*N ) * (1e-6);
-    int transa = CblasNoTrans;
-    int transb = CblasNoTrans;
+    CBLAS_TRANSPOSE  transa = CblasNoTrans;
+    CBLAS_TRANSPOSE  transb = CblasNoTrans;
     mkl_set_num_threads_local(HALF_OMP_THREADS);
 
     if( *pTransB == 't'){
@@ -286,7 +291,7 @@ void* thread_gemm(void * para){
 void sgemm_profile_2pthread(char* pTransA, char* pTransB, const int* pM, const int* pN, const int* pK, const float *pAlpha, const float *pa, const int*plda, const float *pb, const int *pldb, const float *pBeta, float *pc, const int*pldc) {
     // create GemmPara
 
-    GemmPara* para1 = mkl_malloc(sizeof(GemmPara), 64);
+    GemmPara* para1 = (GemmPara*)mkl_malloc(sizeof(GemmPara), 64);
     //GemmPara para = {pTransA, pTransB, pM, pN, pK, pAlpha, pa, plda, pb, pldb, pBeta, pc, pldc};
     para1->pTransA = pTransA;
     para1->pTransB = pTransB;
@@ -308,8 +313,8 @@ void sgemm_profile_2pthread(char* pTransA, char* pTransB, const int* pM, const i
     float * b = matrix_init(*pK,*pN);
     float * c = matrix_init(*pM,*pN);
 
-    GemmPara* para2 = mkl_malloc(sizeof(GemmPara), 64);
-    memcpy(para2, para1, sizeof(GemmPara));
+    GemmPara* para2 = (GemmPara*)mkl_malloc(sizeof(GemmPara), 64);
+    std::memcpy(para2, para1, sizeof(GemmPara));
     para2->pa = a;
     para2->pb = b;
     para2->pc = c;
@@ -340,8 +345,8 @@ void sgemm_profile_2ompthread(char* pTransA, char* pTransB, const int* pM, const
     float * c = matrix_init(*pM,*pN);
 
     double gflops = (M*N*K*2 + 2*M*N ) * (1e-6);
-    int transa = CblasNoTrans;
-    int transb = CblasNoTrans;
+    CBLAS_TRANSPOSE transa = CblasNoTrans;
+    CBLAS_TRANSPOSE transb = CblasNoTrans;
 
     if( *pTransB == 't'){
         transb = CblasTrans;
@@ -372,7 +377,7 @@ void sgemm_profile_2ompthread(char* pTransA, char* pTransB, const int* pM, const
 
 float* matrix_init(int A, int B)
 {
-    float * p = mkl_malloc(A*B*sizeof(float), 64);
+    float * p = (float*)mkl_malloc(A*B*sizeof(float), 64);
     int a,b;
 #if 1
     //#pragma omp parallel for collapse(2)
@@ -409,12 +414,12 @@ void var_main(){
     int N = 102400*16;
 #else
     int M = 40;
-    int N = 1024*16;
+    int N = 102400*16;
 #endif
 
     float * a1 = matrix_init(M,N);
     float * b1 = matrix_init(M,N);
-    float * c1 = mkl_malloc(M*N*sizeof(float), 64);
+    float * c1 = (float *)mkl_malloc(M*N*sizeof(float), 64);
 
     bench_var(M, N, a1, b1, c1);
     bench_var_2omp(M, N, a1, b1, c1);
@@ -440,14 +445,14 @@ void var_main(){
 }
 
 
-int main(void)
+int main()
 {
     printf("main start \n");
     char transa, transb;
     int m,n,k,lda,ldb,ldc;
     float alpha,beta;
 
-#if 0
+#if 1 
 
     var_main();
 
