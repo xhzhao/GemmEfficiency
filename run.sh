@@ -4,19 +4,19 @@ CORES=`lscpu | grep Core | awk '{print $4}'`
 SOCKETS=`lscpu | grep Socket | awk '{print $2}'`
 TOTAL_CORES=`expr $CORES \* $SOCKETS`
 
-KMP_SETTING="KMP_AFFINITY=compact,1,0,granularity=fine"
+KMP_SETTING="KMP_HW_SUBSET=2s,20c,1t KMP_AFFINITY=compact,1,0,granularity=fine"
+#KMP_SETTING="KMP_AFFINITY=compact,1,0,granularity=fine"
 
-if [ $1 == "half" ] ; then
-    export OMP_NUM_THREADS=20
-    echo -e "### using OMP_NUM_THREADS=20"
-else
-    export OMP_NUM_THREADS=$TOTAL_CORES
-    echo -e "### using OMP_NUM_THREADS=$TOTAL_CORES"
-fi
-
+export OMP_NUM_THREADS=40
 export $KMP_SETTING
-
+#export MKL_DYNAMICS=False
+#export KML_HOT_TEAMS_MAX_LEVELS=2
 
 echo -e "### using $KMP_SETTING\n"
 
-./test.bin
+if [ $1 == "test" ] ; then
+    ./test.bin
+else
+    ./nested n
+    ./nested p
+fi

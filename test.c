@@ -5,8 +5,9 @@
 #include <mkl.h>
 #include <pthread.h>
 
-#define WARM_UP     100
-#define SGEMM_COUNT 40960   // every sgemm iteration numbers
+#define WARM_UP     10
+#define SGEMM_COUNT 1000   // every sgemm iteration numbers
+#define USE_VAR     1
 
 float* matrix_init(int A, int B);
 //get the system time in ms
@@ -26,6 +27,89 @@ double get_time(void)
 extern void sgemm_(char*, char*, const int*, const int*, const int*, const float *, const float *, const int*, const float *, const int*, const float *, float *, const int*);
 
 
+inline void variance(int M, int N, float * a, float * b, float *c){
+    int i, j;
+    #pragma omp for nowait collapse(1)
+    for(i = 0; i < M; i++){
+        #pragma omp simd
+        for(j =0; j < N; j++){
+            c[i * N + j] = (a[i * N + j] * 1.01) * (b[i * N + j] + 0.001);
+        }
+    }
+}
+
+
+void bench_var(int M, int N, float * a, float * b, float *c){
+    
+    double t0 = 0;
+    int t;
+    for(t=0; t < SGEMM_COUNT + WARM_UP; t++)
+    {
+        if (t == WARM_UP){
+            t0 = get_time();
+        }
+        #pragma omp parallel num_threads(40)
+        variance(M, N, a, b, c);
+
+    }
+    double t1 = get_time() - t0;
+    double avg_time = t1/SGEMM_COUNT;
+    printf("bench_var end, avg time = %.2f\n", avg_time);
+}
+
+void bench_var_2omp(int M, int N, float * a, float * b, float *c){
+    
+    double t0 = 0;
+    int t,d;
+    for(t=0; t < SGEMM_COUNT + WARM_UP; t++)
+    {
+        if (t == WARM_UP){
+            t0 = get_time();
+        }
+        omp_set_nested(1);
+        #pragma omp parallel for num_threads(2) proc_bind(spread)
+        for(d = 0; d < 2; d++)
+        #pragma omp parallel num_threads(20) proc_bind(close)
+        {
+            //if(d == 0){
+            //omp_set_num_threads(20);
+            variance(M/2, N, a + d * M * N /2, b + d * M * N /2, c + d * M * N /2);
+            //}
+        }
+    }
+    double t1 = get_time() - t0;
+    double avg_time = t1/SGEMM_COUNT;
+    printf("bench_var_2omp end, avg time = %.2f\n", avg_time);
+}
+
+/*
+void bench_var_2omp2(int M, int N, float * a1, float * b1, float *c1,
+        float * a2, float * b2, float * c2){
+    
+    double t0 = 0;
+    int t,d;
+    for(t=0; t < SGEMM_COUNT + WARM_UP; t++)
+    {
+        if (t == WARM_UP){
+            t0 = get_time();
+        }
+        omp_set_nested(1);
+        #pragma omp parallel for num_threads(2) proc_bind(spread)
+        for(d = 0; d < 2; d++){
+
+            omp_set_num_threads(20);
+            if(d == 0){
+                variance(M, N, a1, b1, c1);
+            }else{
+                variance(M, N, a2, b2, c2);
+            }
+        }
+    }
+    double t1 = get_time() - t0;
+    double avg_time = t1/SGEMM_COUNT;
+    printf("bench_var_2omp2 end, avg time = %.2f\n", avg_time);
+}
+*/
 
 // profile for one type of sgemm, 50 iterations
 void sgemm_profile(char* pTransA, char* pTransB, const int* pM, const int* pN, const int* pK, const float *pAlpha, const float *pa, const int*plda, const float *pb, const int *pldb, const float *pBeta, float *pc, const int*pldc) {
@@ -118,7 +202,7 @@ void sgemm_profile_batch(int batchsize, char* pTransA, char* pTransB, const int*
         if (i == WARM_UP){
             t0 = get_time();
         }
-        cblas_sgemm_batch(CblasRowMajor, transA, transB, m, n, k, alpha, A, lda, B, ldb, beta, C, ldc, 1, size_per_grp);
+        cblas_sgemm_batch(CblasRowMajor, transA, transB, m, n, k, alpha, (const float**)A, lda, (const float **)B, ldb, beta, C, ldc, 1, size_per_grp);
     }                                                                           
     double t1 = get_time() - t0;                                                
     double avg_time = t1/SGEMM_COUNT; 
@@ -196,7 +280,7 @@ void* thread_gemm(void * para){
     double t1 = get_time() - t0;
     double avg_time = t1/SGEMM_COUNT;
     printf("sgemm_profile_2pthread end, avg time = %.2f, GFLOPS = %.2f, start = %.4lf, dura = %.4lf\n", avg_time, gflops/avg_time, t0,t1);
-
+    return 0;
 }
 
 void sgemm_profile_2pthread(char* pTransA, char* pTransB, const int* pM, const int* pN, const int* pK, const float *pAlpha, const float *pa, const int*plda, const float *pb, const int *pldb, const float *pBeta, float *pc, const int*pldc) {
@@ -270,12 +354,13 @@ void sgemm_profile_2ompthread(char* pTransA, char* pTransB, const int* pM, const
         }
         omp_set_nested(1);
         #pragma omp parallel for num_threads(2) proc_bind(spread)
-        for(d = 0; d < 2; d++){
+        for(d = 0; d < 2; ++d)
+        //#pragma omp parallel num_threads(20) proc_bind(close)
+        {
             mkl_set_num_threads_local(20);
-            //omp_set_nested(0);
-            if(d == 0){
+            if (0 == d){
                 cblas_sgemm(CblasRowMajor, transa, transb, *pM, *pN, *pK, *pAlpha, pa, *plda, pb, *pldb, *pBeta, pc, *pldc);
-            }else{
+            } else {
                 cblas_sgemm(CblasRowMajor, transa, transb, *pM, *pN, *pK, *pAlpha, a, *plda, b, *pldb, *pBeta, c, *pldc);
             }
         }
@@ -289,10 +374,13 @@ float* matrix_init(int A, int B)
 {
     float * p = mkl_malloc(A*B*sizeof(float), 64);
     int a,b;
+#if 1
     //#pragma omp parallel for collapse(2)
     for(a=0; a < A; a++)
         for(b=0; b < B;b++)
-            p[a*B+b] = rand() % 1000; 
+            //p[a*B+b] = rand() % 1000; 
+            p[a*B+b] = 1.0f; 
+#endif
     return p;
 }
 
@@ -314,6 +402,43 @@ void sgemm_main(int index, char transa, char transb, int M, int N, int K, int ld
 }
 
 
+void var_main(){
+
+#if 0
+    int M = 40;
+    int N = 102400*16;
+#else
+    int M = 40;
+    int N = 1024*16;
+#endif
+
+    float * a1 = matrix_init(M,N);
+    float * b1 = matrix_init(M,N);
+    float * c1 = mkl_malloc(M*N*sizeof(float), 64);
+
+    bench_var(M, N, a1, b1, c1);
+    bench_var_2omp(M, N, a1, b1, c1);
+
+
+
+#if 0
+    float * a2 = matrix_init(M,N);
+    float * b2 = matrix_init(M,N);
+    float * c2 = matrix_init(M,N);
+    bench_var_2omp2(M, N, a1, b1, c1, a2, b2, c2);
+    mkl_free(a2);
+    mkl_free(b2);
+    mkl_free(c2);
+#endif
+
+    mkl_free(a1);
+    mkl_free(b1);
+    mkl_free(c1);
+
+    
+
+}
+
 
 int main(void)
 {
@@ -322,12 +447,17 @@ int main(void)
     int m,n,k,lda,ldb,ldc;
     float alpha,beta;
 
+#if 0
+
+    var_main();
+
+#else
     // small sgemm
     transa='n'; transb='n'; m=20; n=2400; k=800; lda=k; alpha=1.0000; ldb=n; beta=0.0000; ldc=n;
     sgemm_main(1, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
-    transa='n'; transb='n'; m=2000; n=2400; k=800; lda=k; alpha=1.0000; ldb=n; beta=0.0000; ldc=n;
-    sgemm_main(2, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
-
+    //transa='n'; transb='n'; m=2000; n=2400; k=800; lda=k; alpha=1.0000; ldb=n; beta=0.0000; ldc=n;
+    //sgemm_main(2, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
+#endif
 
     return 1;
 }
