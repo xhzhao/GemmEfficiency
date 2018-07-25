@@ -10,8 +10,8 @@
 #include <cstdint>
 #include <cstring>
 
-#define WARM_UP     100
-#define SGEMM_COUNT 10000   // every sgemm iteration numbers
+#define WARM_UP     10
+#define SGEMM_COUNT 1000   // every sgemm iteration numbers
 #define USE_VAR     1
 
 float* matrix_init(int A, int B);
@@ -344,7 +344,7 @@ void sgemm_profile_2ompthread(char* pTransA, char* pTransB, const int* pM, const
     float * b = matrix_init(*pK,*pN);
     float * c = matrix_init(*pM,*pN);
 
-    double gflops = (M*N*K*2 + 2*M*N ) * (1e-6);
+    double gflops = 2 * (M*N*K*2 + 2*M*N ) * (1e-6);
     CBLAS_TRANSPOSE transa = CblasNoTrans;
     CBLAS_TRANSPOSE transb = CblasNoTrans;
 
@@ -452,7 +452,7 @@ int main()
     int m,n,k,lda,ldb,ldc;
     float alpha,beta;
 
-#if 0
+#if 1
 
     var_main();
 

@@ -13,7 +13,7 @@
 #include <tbb.h>
 
 #define WARM_UP     100
-#define SGEMM_COUNT 1000   // every sgemm iteration numbers
+#define SGEMM_COUNT 10000   // every sgemm iteration numbers
 #define USE_VAR     1
 
 using namespace tbb;
@@ -99,9 +99,13 @@ public:
         mkl_set_num_threads_local(20);
         for(size_t i = r.begin(); i != r.end(); i++){
             if (i == 0){
+                //printf("i == 0\n");
+                //while(1) ;
                 cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, M, N, K,
                     alpha, a, K, b, N, beta, c, N);
             } else {
+                //printf("i == 1\n");
+                //while(1) ;
                 a = my_a + M * K;
                 a = my_a + M * K;
                 c = my_c + M * N;
@@ -114,7 +118,7 @@ public:
     {}
 };
 
-void main(){
+int main(){
     printf("main start \n");
 
     tbb::task_scheduler_init init(40);
@@ -144,12 +148,23 @@ void main(){
     float * c = (float *)mkl_malloc(2*M*N*sizeof(float), 64);
     
     double t0 = 0;
+    static  affinity_partitioner ap;
     for(int i=0; i < SGEMM_COUNT + WARM_UP; i++)
     {
         if (i == WARM_UP){
             t0 = get_time();
         }
-        parallel_for(blocked_range<size_t>(0,2), ApplyGemm(a,b,c));
+#if 1
+
+        parallel_for(blocked_range<size_t>(0,2), ApplyGemm(a,b,c), ap);
+#else
+        const float alpha = 1.0;
+        const float beta = 0.0;
+        cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, M, N, K,
+            alpha, a, K, b, N, beta, c, N);
+        cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, M, N, K,
+            alpha, a, K, b, N, beta, c, N);
+#endif
     }
     double gflops = 2*(M*N*K*2 + 2*M*N ) * (1e-6);
     double t1 = get_time() - t0;                                                
@@ -159,5 +174,5 @@ void main(){
 
 #endif
 
-
+    return 1;
 }

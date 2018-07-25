@@ -1,1 +1,1 @@
-cd build && make
+cd build && CC=icc CXX=icpc cmake .. && make

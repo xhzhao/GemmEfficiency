@@ -9,13 +9,13 @@ KMP_SETTING="KMP_HW_SUBSET=2s,20c,1t KMP_AFFINITY=verbose,compact,1,0,granularit
 
 export OMP_NUM_THREADS=40
 export $KMP_SETTING
-
+#export MKL_DYNAMICS=False
+#export KML_HOT_TEAMS_MAX_LEVELS=2
 
 echo -e "### using $KMP_SETTING\n"
 
-if [ $1 == "test" ] ; then
-    ./test.bin
+if [ $1 == "omp" ] ; then
+    ./build/test_omp
 else
-    ./nested n
-    ./nested p
+    ./build/test_tbb
 fi
