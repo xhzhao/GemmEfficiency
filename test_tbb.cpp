@@ -107,7 +107,7 @@ public:
                 //printf("i == 1\n");
                 //while(1) ;
                 a = my_a + M * K;
-                a = my_a + M * K;
+                b = my_b + K * N;
                 c = my_c + M * N;
                 cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, M, N, K,
                     alpha, a, K, b, N, beta, c, N);

@@ -1,3 +1,3 @@
 # GemmEfficiency
 
-First, please install MKLML library, refer to this link[https://github.com/xhzhao/EnvCheck]
+Requirement: please install mkl, icc, tbb
