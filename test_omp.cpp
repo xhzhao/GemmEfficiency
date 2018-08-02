@@ -11,7 +11,7 @@
 #include <cstring>
 
 #define WARM_UP     10
-#define SGEMM_COUNT 1000   // every sgemm iteration numbers
+#define SGEMM_COUNT 10000   // every sgemm iteration numbers
 #define USE_VAR     1
 
 float* matrix_init(int A, int B);
@@ -358,6 +358,7 @@ void sgemm_profile_2ompthread(char* pTransA, char* pTransB, const int* pM, const
             t0 = get_time();
         }
         omp_set_nested(1);
+        omp_set_max_active_levels(2);
         #pragma omp parallel for num_threads(2) proc_bind(spread)
         for(d = 0; d < 2; ++d)
         //#pragma omp parallel num_threads(20) proc_bind(close)
@@ -452,7 +453,7 @@ int main()
     int m,n,k,lda,ldb,ldc;
     float alpha,beta;
 
-#if 1
+#if 0
 
     var_main();
 
