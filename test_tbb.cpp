@@ -144,7 +144,15 @@ int main(){
     float * a = matrix_init(2*M,K);
     float * b = matrix_init(2*K,N);
     float * c = (float *)mkl_malloc(2*M*N*sizeof(float), 64);
-    
+
+#if 1
+    int dummy[40];
+    #pragma omp parallel for num_threads(40)
+    for(int i = 0; i < 40; i++){
+        dummy[i] = 0;
+    }
+#endif 
+
     double t0 = 0;
     static  affinity_partitioner ap;
     for(int i=0; i < SGEMM_COUNT + WARM_UP; i++)
