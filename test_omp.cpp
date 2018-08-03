@@ -352,22 +352,51 @@ void sgemm_profile_2ompthread(char* pTransA, char* pTransB, const int* pM, const
         transb = CblasTrans;
     }
     double t0 = 0;
+
+    #pragma omp parallel num_threads(40) default(shared)
+    {
+        int ompTid = omp_get_thread_num();
+        int numomp = omp_get_num_threads();
+        int numprc = omp_get_num_procs();
+        int ompmax = omp_get_max_threads();
+        kmp_affinity_mask_t new_omp_mask;
+        kmp_create_affinity_mask(&new_omp_mask);
+        kmp_set_affinity_mask_proc(ompTid, &new_omp_mask);
+        //printf("tid = %d,set os proc = %d \n", ompTid, ompTid + d * 20);
+        //kmp_set_affinity_mask_proc(ompTid + ompmax, &new_omp_mask);
+        if (kmp_set_affinity(&new_omp_mask) != 0)
+        {
+            printf("Error: kmp_set_affinity(%d, &new_omp_mask)\n", ompTid);
+        }
+    }
     for(i=0; i < SGEMM_COUNT + WARM_UP; i++)
     {
         if (i == WARM_UP){
             t0 = get_time();
         }
+
+
         omp_set_nested(1);
-        omp_set_max_active_levels(2);
-        #pragma omp parallel for num_threads(2) proc_bind(spread)
+        //omp_set_max_active_levels(2);
+        //mkl_set_num_threads(20);
+        //mkl_set_num_threads_local(20);
+        #pragma omp parallel for num_threads(2) //proc_bind(spread)
         for(d = 0; d < 2; ++d)
         //#pragma omp parallel num_threads(20) proc_bind(close)
         {
+            //binding
+
             mkl_set_num_threads_local(20);
+            mkl_set_dynamic(0);
+
             if (0 == d){
+
                 cblas_sgemm(CblasRowMajor, transa, transb, *pM, *pN, *pK, *pAlpha, pa, *plda, pb, *pldb, *pBeta, pc, *pldc);
+
             } else {
+
                 cblas_sgemm(CblasRowMajor, transa, transb, *pM, *pN, *pK, *pAlpha, a, *plda, b, *pldb, *pBeta, c, *pldc);
+
             }
         }
     }
@@ -397,10 +426,10 @@ void sgemm_main(int index, char transa, char transb, int M, int N, int K, int ld
     float * b = matrix_init(K,N);
     float * c = matrix_init(M,N);
     printf("----------GEMM %d----------\n", index);
-    sgemm_profile(&transa, &transb, &M, &N, &K, &alpha, a, &lda, b, &ldb, &beta, c, &ldc);
+    //sgemm_profile(&transa, &transb, &M, &N, &K, &alpha, a, &lda, b, &ldb, &beta, c, &ldc);
     //sgemm_profile_pack(&transa, &transb, &M, &N, &K, &alpha, a, &lda, b, &ldb, &beta, c, &ldc);
     //sgemm_profile_batch(4, &transa, &transb, &M, &N, &K, &alpha, &lda, &ldb, &beta, &ldc);
-    sgemm_profile_2pthread(&transa, &transb, &M, &N, &K, &alpha, a, &lda, b, &ldb, &beta, c, &ldc);
+    //sgemm_profile_2pthread(&transa, &transb, &M, &N, &K, &alpha, a, &lda, b, &ldb, &beta, c, &ldc);
     sgemm_profile_2ompthread(&transa, &transb, &M, &N, &K, &alpha, a, &lda, b, &ldb, &beta, c, &ldc);
     mkl_free(a);
     mkl_free(b);

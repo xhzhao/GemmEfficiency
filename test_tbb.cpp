@@ -97,15 +97,12 @@ public:
         float * b = my_b;
         float * c = my_c;
         mkl_set_num_threads_local(20);
+
         for(size_t i = r.begin(); i != r.end(); i++){
             if (i == 0){
-                //printf("i == 0\n");
-                //while(1) ;
                 cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, M, N, K,
                     alpha, a, K, b, N, beta, c, N);
             } else {
-                //printf("i == 1\n");
-                //while(1) ;
                 a = my_a + M * K;
                 b = my_b + K * N;
                 c = my_c + M * N;
@@ -121,7 +118,8 @@ public:
 int main(){
     printf("main start \n");
 
-    tbb::task_scheduler_init init(40);
+    //tbb::task_scheduler_init init(40);
+    tbb::task_scheduler_init init(2);
     //tbb::task_scheduler_init init(tbb::task_scheduler_init::automatic);
 
 #if 0
