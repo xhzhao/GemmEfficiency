@@ -15,6 +15,11 @@
 #define WARM_UP     100
 #define SGEMM_COUNT 10000   // every sgemm iteration numbers
 #define USE_VAR     1
+const int M = 20;
+const int N = 2400;
+const int K = 800;
+const float alpha = 1.0;
+const float beta = 0.0;
 
 using namespace tbb;
 
@@ -85,19 +90,12 @@ class ApplyGemm{
     float * const my_a;
     float * const my_b;
     float * const my_c;
-    const int M = 20;
-    const int N = 2400;
-    const int K = 800;
-    const float alpha = 1.0;
-    const float beta = 0.0;
-
 public:
     void operator()(const blocked_range<size_t>& r) const {
         float * a = my_a;
         float * b = my_b;
         float * c = my_c;
         mkl_set_num_threads_local(20);
-
         for(size_t i = r.begin(); i != r.end(); i++){
             if (i == 0){
                 cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, M, N, K,
@@ -115,44 +113,40 @@ public:
     {}
 };
 
-int main(){
-    printf("main start \n");
-
-    //tbb::task_scheduler_init init(40);
-    tbb::task_scheduler_init init(2);
-    //tbb::task_scheduler_init init(tbb::task_scheduler_init::automatic);
-
-#if 0
-    int M = 40;                                                                 
-    int N = 102400*16;    
-    float * a = matrix_init(M,N);
-    float * b = matrix_init(M,N);
-    float * c = (float *)mkl_malloc(M*N*sizeof(float), 64);
+void FooMain(){
+    tbb::task_scheduler_init init(tbb::task_scheduler_init::automatic);
+    int m = 40;                                                                 
+    int n = 102400*16;    
+    float * a = matrix_init(m,n);
+    float * b = matrix_init(m,n);
+    float * c = (float *)mkl_malloc(m*n*sizeof(float), 64);
     for(int i = 0; i < 10; i++)
-        parallel_for(blocked_range<size_t>(0,M*N), ApplyFoo(a,b,c));
+        parallel_for(blocked_range<size_t>(0,m*n), ApplyFoo(a,b,c));
 
     __tstart(plain);
     for(int i = 0; i < 1000; i++)
-        parallel_for(blocked_range<size_t>(0,M*N), ApplyFoo(a,b,c));
+        parallel_for(blocked_range<size_t>(0,m*n), ApplyFoo(a,b,c));
     __tend(plain);
 
-#else
-    const int M = 20;
-    const int N = 2400;
-    const int K = 800;
+}
 
-    float * a = matrix_init(2*M,K);
-    float * b = matrix_init(2*K,N);
-    float * c = (float *)mkl_malloc(2*M*N*sizeof(float), 64);
-
-#if 1
+void simple_omp_parallel(){
     int dummy[40];
     #pragma omp parallel for num_threads(40)
     for(int i = 0; i < 40; i++){
         dummy[i] = 0;
     }
-#endif 
+    printf("simple_omp_parallel done\n");
+}
 
+void SgemmMain(){
+    tbb::task_scheduler_init init(2);
+    //tbb::task_scheduler_init init(tbb::task_scheduler_init::automatic);
+
+    float * a = matrix_init(2*M,K);
+    float * b = matrix_init(2*K,N);
+    float * c = (float *)mkl_malloc(2*M*N*sizeof(float), 64);
+    
     double t0 = 0;
     static  affinity_partitioner ap;
     for(int i=0; i < SGEMM_COUNT + WARM_UP; i++)
@@ -160,25 +154,60 @@ int main(){
         if (i == WARM_UP){
             t0 = get_time();
         }
-#if 1
-
         parallel_for(blocked_range<size_t>(0,2), ApplyGemm(a,b,c), ap);
-#else
-        const float alpha = 1.0;
-        const float beta = 0.0;
-        cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, M, N, K,
-            alpha, a, K, b, N, beta, c, N);
-        cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, M, N, K,
-            alpha, a, K, b, N, beta, c, N);
-#endif
     }
     double gflops = 2*(M*N*K*2 + 2*M*N ) * (1e-6);
     double t1 = get_time() - t0;                                                
     double avg_time = t1/SGEMM_COUNT; 
     printf("sgemm_tbb, avg time = %.2f, GFLOPS = %.2f \n", avg_time, gflops/avg_time);
+}
 
+void* thread_tbb_gemm(void* p){
+    tbb::task_scheduler_init init(20);
 
-#endif
+    float * a = matrix_init(M,K);
+    float * b = matrix_init(K,N);
+    float * c = (float *)mkl_malloc(M*N*sizeof(float), 64);
+    
+    double t0 = 0;
+    static  affinity_partitioner ap;
+    for(int i=0; i < SGEMM_COUNT + WARM_UP; i++)
+    {
+        if (i == WARM_UP){
+            t0 = get_time();
+        }
+        //parallel_for(blocked_range<size_t>(0,2), ApplyGemm(a,b,c), ap);
+        cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, M, N, K,
+                    alpha, a, K, b, N, beta, c, N);
+    }
+    double gflops = (M*N*K*2 + 2*M*N ) * (1e-6);
+    double t1 = get_time() - t0;                                                
+    double avg_time = t1/SGEMM_COUNT; 
+    printf("sgemm_tbb, avg time = %.2f, GFLOPS = %.2f \n", avg_time, gflops/avg_time);
+    return 0;
+}
+void PthreadMain(){
+
+    pthread_t thread1, thread2;
+    int err1 = pthread_create(&thread1, NULL, thread_tbb_gemm, NULL);
+    int err2 = pthread_create(&thread2, NULL, thread_tbb_gemm, NULL);
+    if (err1 | err2){
+        printf("error in creating thread \n");
+    }
+    err1 = pthread_join(thread1, NULL);
+    err2 = pthread_join(thread2, NULL);
+    if (err1 | err2){
+        printf("error in joining thread \n");
+    }
+}
+
+int main(){
+    printf("main start \n");
+
+    //FooMain();
+    //simple_omp_parallel();
+    SgemmMain();
+    //PthreadMain();
 
     return 1;
 }

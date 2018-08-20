@@ -374,8 +374,6 @@ void sgemm_profile_2ompthread(char* pTransA, char* pTransB, const int* pM, const
         if (i == WARM_UP){
             t0 = get_time();
         }
-
-
         omp_set_nested(1);
         //omp_set_max_active_levels(2);
         //mkl_set_num_threads(20);
@@ -385,18 +383,12 @@ void sgemm_profile_2ompthread(char* pTransA, char* pTransB, const int* pM, const
         //#pragma omp parallel num_threads(20) proc_bind(close)
         {
             //binding
-
             mkl_set_num_threads_local(20);
             mkl_set_dynamic(0);
-
             if (0 == d){
-
                 cblas_sgemm(CblasRowMajor, transa, transb, *pM, *pN, *pK, *pAlpha, pa, *plda, pb, *pldb, *pBeta, pc, *pldc);
-
             } else {
-
                 cblas_sgemm(CblasRowMajor, transa, transb, *pM, *pN, *pK, *pAlpha, a, *plda, b, *pldb, *pBeta, c, *pldc);
-
             }
         }
     }
