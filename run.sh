@@ -8,7 +8,7 @@ TOTAL_CORES=`expr $CORES \* $SOCKETS`
 #KMP_SETTING="KMP_AFFINITY=compact,1,0,granularity=fine,verbose"
 KMP_SETTING="KMP_AFFINITY=compact,1,0,granularity=fine"
 
-export MKL_NUM_THREADS=20
+#export MKL_NUM_THREADS=1
 export $KMP_SETTING
 export MKL_DYNAMIC=FALSE
 #export MKL_VERBOSE=1
@@ -16,7 +16,19 @@ export MKL_DYNAMIC=FALSE
 echo -e "### using $KMP_SETTING\n"
 
 if [ $1 == "omp" ] ; then
-    ./build/test_omp
+    MKL_NUM_THREADS=1 ./build/test_omp
+    MKL_NUM_THREADS=2 ./build/test_omp
+    MKL_NUM_THREADS=5 ./build/test_omp
+    MKL_NUM_THREADS=10 ./build/test_omp
+    MKL_NUM_THREADS=20 ./build/test_omp
+
+    MKL_NUM_THREADS=1 numactl --physcpubind=0-19 --membind=0  ./build/test_omp
+    MKL_NUM_THREADS=2 numactl --physcpubind=0-19 --membind=0  ./build/test_omp
+    MKL_NUM_THREADS=5 numactl --physcpubind=0-19 --membind=0  ./build/test_omp
+    MKL_NUM_THREADS=10 numactl --physcpubind=0-19 --membind=0  ./build/test_omp
+    MKL_NUM_THREADS=20 numactl --physcpubind=0-19 --membind=0  ./build/test_omp
+
 else
     ./build/test_tbb
+    numactl --physcpubind=0-19 --membind=0 ./build/test_tbb
 fi

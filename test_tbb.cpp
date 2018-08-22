@@ -162,6 +162,27 @@ void SgemmMain(){
     printf("sgemm_tbb, avg time = %.2f, GFLOPS = %.2f \n", avg_time, gflops/avg_time);
 }
 
+void SgemmScalingMain(int tbb_threads){
+    tbb::task_scheduler_init init(tbb_threads);
+    float * a = matrix_init(M,K);
+    float * b = matrix_init(K,N);
+    float * c = (float *)mkl_malloc(M*N*sizeof(float), 64);
+    
+    double t0 = 0;
+    for(int i=0; i < SGEMM_COUNT + WARM_UP; i++)
+    {
+        if (i == WARM_UP){
+            t0 = get_time();
+        }
+        cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, M, N, K,
+                    alpha, a, K, b, N, beta, c, N);
+    }
+    double gflops = (M*N*K*2 + 2*M*N ) * (1e-6);
+    double t1 = get_time() - t0;                                                
+    double avg_time = t1/SGEMM_COUNT; 
+    printf("sgemm_scale, tbb threads = %d, avg time = %.2f, GFLOPS = %.2f \n", tbb_threads, avg_time, gflops/avg_time);
+}
+
 void* thread_tbb_gemm(void* p){
     tbb::task_scheduler_init init(20);
 
@@ -206,7 +227,12 @@ int main(){
 
     //FooMain();
     //simple_omp_parallel();
-    SgemmMain();
+    //SgemmMain();
+    SgemmScalingMain(1);
+    SgemmScalingMain(2);
+    SgemmScalingMain(5);
+    SgemmScalingMain(10);
+    SgemmScalingMain(20);
     //PthreadMain();
 
     return 1;
