@@ -397,6 +397,46 @@ void sgemm_profile_2ompthread(char* pTransA, char* pTransB, const int* pM, const
     printf("sgemm_profile_2ompthread end, avg time = %.2f, GFLOPS = %.2f\n", avg_time, gflops/avg_time);
 }
 
+void sgemm_profile_2ompthread_ideal(char* pTransA, char* pTransB, const int* pM, const int* pN, const int* pK, const float *pAlpha, const float *pa, const int*plda, const float *pb, const int *pldb, const float *pBeta, float *pc, const int*pldc) {
+    int i = 0, d = 0;          // iteratoin in every sgemm test
+    float M = *pM;
+    float N = *pN;
+    float K = *pK;
+
+    //create memory for the 2nd sgemm
+    float * a = matrix_init(*pM,*pK);
+    float * b = matrix_init(*pK,*pN);
+    float * c = matrix_init(*pM,*pN);
+
+    double gflops = 2 * (M*N*K*2 + 2*M*N ) * (1e-6);
+    CBLAS_TRANSPOSE transa = CblasNoTrans;
+    CBLAS_TRANSPOSE transb = CblasNoTrans;
+
+    if( *pTransB == 't'){
+        transb = CblasTrans;
+    }
+    omp_set_nested(1);
+    double t0 = 0;
+    #pragma omp parallel num_threads(2)
+    {
+        for(i=0; i < SGEMM_COUNT + WARM_UP; i++){
+            if (i == WARM_UP){
+                t0 = get_time();
+            }
+            mkl_set_num_threads_local(20);
+            mkl_set_dynamic(0);
+            if (omp_get_thread_num() == 0){
+                cblas_sgemm(CblasRowMajor, transa, transb, *pM, *pN, *pK, *pAlpha, pa, *plda, pb, *pldb, *pBeta, pc, *pldc);
+            } else {
+                cblas_sgemm(CblasRowMajor, transa, transb, *pM, *pN, *pK, *pAlpha, a, *plda, b, *pldb, *pBeta, c, *pldc);
+            }
+        }
+        double t1 = get_time() - t0;                                               
+        double avg_time = t1/SGEMM_COUNT;                                          
+        printf("sgemm_profile_2ompthread end, avg time = %.2f, GFLOPS = %.2f\n", avg_time, gflops/avg_time);
+    }
+}
+
 float* matrix_init(int A, int B)
 {
     float * p = (float*)mkl_malloc(A*B*sizeof(float), 64);
@@ -421,8 +461,9 @@ void sgemm_main(int index, char transa, char transb, int M, int N, int K, int ld
     sgemm_profile(&transa, &transb, &M, &N, &K, &alpha, a, &lda, b, &ldb, &beta, c, &ldc);
     //sgemm_profile_pack(&transa, &transb, &M, &N, &K, &alpha, a, &lda, b, &ldb, &beta, c, &ldc);
     //sgemm_profile_batch(4, &transa, &transb, &M, &N, &K, &alpha, &lda, &ldb, &beta, &ldc);
-    //sgemm_profile_2pthread(&transa, &transb, &M, &N, &K, &alpha, a, &lda, b, &ldb, &beta, c, &ldc);
-    //sgemm_profile_2ompthread(&transa, &transb, &M, &N, &K, &alpha, a, &lda, b, &ldb, &beta, c, &ldc);
+    sgemm_profile_2pthread(&transa, &transb, &M, &N, &K, &alpha, a, &lda, b, &ldb, &beta, c, &ldc);
+    sgemm_profile_2ompthread(&transa, &transb, &M, &N, &K, &alpha, a, &lda, b, &ldb, &beta, c, &ldc);
+    sgemm_profile_2ompthread_ideal(&transa, &transb, &M, &N, &K, &alpha, a, &lda, b, &ldb, &beta, c, &ldc);
     mkl_free(a);
     mkl_free(b);
     mkl_free(c);
