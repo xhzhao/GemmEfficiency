@@ -5,14 +5,21 @@
 #include <mkl.h>
 #include <pthread.h>
 #include <omp.h>
-
+#include<math.h>
 #include <iostream>
 #include <cstdint>
 #include <cstring>
 
 #define WARM_UP     10
-#define SGEMM_COUNT 10000   // every sgemm iteration numbers
+#define SGEMM_COUNT 100   // every sgemm iteration numbers
 #define USE_VAR     1
+
+
+extern int my_sgemm(char transa, char transb,
+  const int M, const int N, const int K,
+  const float alpha, const float* A, const int lda,
+  const float * B, const int ldb, 
+  const float beta, float * C, const int ldc);
 
 float* matrix_init(int A, int B);
 //get the system time in ms
@@ -408,7 +415,7 @@ void sgemm_profile_2ompthread_ideal(char* pTransA, char* pTransB, const int* pM,
     float * b = matrix_init(*pK,*pN);
     float * c = matrix_init(*pM,*pN);
 
-    double gflops = 2 * (M*N*K*2 + 2*M*N ) * (1e-6);
+    double gflops = (M*N*K*2 + 2*M*N ) * (1e-6);
     CBLAS_TRANSPOSE transa = CblasNoTrans;
     CBLAS_TRANSPOSE transb = CblasNoTrans;
 
@@ -426,9 +433,9 @@ void sgemm_profile_2ompthread_ideal(char* pTransA, char* pTransB, const int* pM,
             mkl_set_num_threads_local(20);
             mkl_set_dynamic(0);
             if (omp_get_thread_num() == 0){
-                cblas_sgemm(CblasRowMajor, transa, transb, *pM, *pN, *pK, *pAlpha, pa, *plda, pb, *pldb, *pBeta, pc, *pldc);
+                my_sgemm(transa, transb, *pM, *pN, *pK, *pAlpha, pa, *plda, pb, *pldb, *pBeta, pc, *pldc);
             } else {
-                cblas_sgemm(CblasRowMajor, transa, transb, *pM, *pN, *pK, *pAlpha, a, *plda, b, *pldb, *pBeta, c, *pldc);
+                my_sgemm(transa, transb, *pM, *pN, *pK, *pAlpha, a, *plda, b, *pldb, *pBeta, c, *pldc);
             }
         }
         double t1 = get_time() - t0;                                               
@@ -437,12 +444,65 @@ void sgemm_profile_2ompthread_ideal(char* pTransA, char* pTransB, const int* pM,
     }
 }
 
+int mysgemm_checkresult(char stransa, char stransb, const int M, const int N, const int K, const float alpha, const float* A, const int lda, const float * B, const int ldb, const float beta, float * C, const int ldc){
+    float * c = matrix_init(M, N);
+    float * c_mkl = matrix_init(M, N);
+    
+    CBLAS_TRANSPOSE  transa = CblasNoTrans;
+    CBLAS_TRANSPOSE  transb = CblasNoTrans;
+    cblas_sgemm(CblasRowMajor, transa, transb, M, N, K, alpha, A, lda, B, ldb, beta, c_mkl, ldc);
+    my_sgemm(stransa, stransb, M, N, K, alpha, A, lda, B, ldb, beta, c, ldc);
+
+    int i, j;
+    for(i=0; i < M; i++)
+        for(j=0; j < N;j++){
+            if(fabs((c[i*N+j] -c_mkl[i*N + j])) > 0.01) {
+                if(fabs(c[i*N+j] -c_mkl[i*N + j])/ fabs(c_mkl[i*N + j]) > 0.01 ){
+                    printf("result mismatch, i = %d, j = %d, a = %.4f, b = %.4f\n", i,j,c[i*N+j],c_mkl[i*N + j]);
+                    return 0;
+                }
+            }
+
+        }
+    printf("my_sgemm test pass \n");
+    return 1;
+
+
+}
+
+// profile for one type of sgemm, 50 iterations
+void sgemm_profile_mysgemm(char* pTransA, char* pTransB, const int* pM, const int* pN, const int* pK, const float *pAlpha, const float *pa, const int*plda, const float *pb, const int *pldb, const float *pBeta, float *pc, const int*pldc) {
+    int i = 0;          // iteratoin in every sgemm test
+    float M = *pM;
+    float N = *pN;
+    float K = *pK;
+    double gflops = (M*N*K*2 + 2*M*N ) * (1e-6);
+    CBLAS_TRANSPOSE  transa = CblasNoTrans;
+    CBLAS_TRANSPOSE  transb = CblasNoTrans;
+
+    if( *pTransB == 't'){
+        transb = CblasTrans;
+    }
+    mysgemm_checkresult(transa, transb, *pM, *pN, *pK, *pAlpha, pa, *plda, pb, *pldb, *pBeta, pc, *pldc);
+    double t0 = 0;
+    for(i=0; i < SGEMM_COUNT + WARM_UP; i++)
+    {
+        if (i == WARM_UP){
+            t0 = get_time();
+        }
+        my_sgemm(transa, transb, *pM, *pN, *pK, *pAlpha, pa, *plda, pb, *pldb, *pBeta, pc, *pldc);
+    }
+    double t1 = get_time() - t0;
+    double avg_time = t1/SGEMM_COUNT;
+    printf("sgemm_profile_mysgemm end, avg time = %.2f, GFLOPS = %.2f\n", avg_time, gflops/avg_time);
+}
+
 float* matrix_init(int A, int B)
 {
     float * p = (float*)mkl_malloc(A*B*sizeof(float), 64);
     int a,b;
 #if 1
-    //#pragma omp parallel for collapse(2)
+    #pragma omp parallel for collapse(2)
     for(a=0; a < A; a++)
         for(b=0; b < B;b++)
             //p[a*B+b] = rand() % 1000; 
@@ -461,9 +521,10 @@ void sgemm_main(int index, char transa, char transb, int M, int N, int K, int ld
     sgemm_profile(&transa, &transb, &M, &N, &K, &alpha, a, &lda, b, &ldb, &beta, c, &ldc);
     //sgemm_profile_pack(&transa, &transb, &M, &N, &K, &alpha, a, &lda, b, &ldb, &beta, c, &ldc);
     //sgemm_profile_batch(4, &transa, &transb, &M, &N, &K, &alpha, &lda, &ldb, &beta, &ldc);
-    sgemm_profile_2pthread(&transa, &transb, &M, &N, &K, &alpha, a, &lda, b, &ldb, &beta, c, &ldc);
-    sgemm_profile_2ompthread(&transa, &transb, &M, &N, &K, &alpha, a, &lda, b, &ldb, &beta, c, &ldc);
+    //sgemm_profile_2pthread(&transa, &transb, &M, &N, &K, &alpha, a, &lda, b, &ldb, &beta, c, &ldc);
+    //sgemm_profile_2ompthread(&transa, &transb, &M, &N, &K, &alpha, a, &lda, b, &ldb, &beta, c, &ldc);
     sgemm_profile_2ompthread_ideal(&transa, &transb, &M, &N, &K, &alpha, a, &lda, b, &ldb, &beta, c, &ldc);
+    sgemm_profile_mysgemm(&transa, &transb, &M, &N, &K, &alpha, a, &lda, b, &ldb, &beta, c, &ldc);
     mkl_free(a);
     mkl_free(b);
     mkl_free(c);

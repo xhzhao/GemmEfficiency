@@ -13,7 +13,7 @@ link_directories(${MKLLIBPATH})
 include_directories(${TBB_INC}) 
 link_directories(${TBB_LIB})
 
-add_executable(test_omp test_omp.cpp)
+add_executable(test_omp test_omp.cpp mysgemm.cpp)
 TARGET_LINK_LIBRARIES(test_omp mkl_rt)
 SET_TARGET_PROPERTIES(test_omp PROPERTIES COMPILE_FLAGS "${CMAKE_CXX_FLAGS} --std=c++11")
 
