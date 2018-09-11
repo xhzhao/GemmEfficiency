@@ -505,8 +505,8 @@ float* matrix_init(int A, int B)
     #pragma omp parallel for collapse(2)
     for(a=0; a < A; a++)
         for(b=0; b < B;b++)
-            //p[a*B+b] = rand() % 1000; 
-            p[a*B+b] = 1.0f; 
+            p[a*B+b] = (rand() % 1000 - 500)/100; 
+            //p[a*B+b] = 1.0f; 
 #endif
     return p;
 }
@@ -518,12 +518,12 @@ void sgemm_main(int index, char transa, char transb, int M, int N, int K, int ld
     float * b = matrix_init(K,N);
     float * c = matrix_init(M,N);
     printf("----------GEMM %d----------\n", index);
-    sgemm_profile(&transa, &transb, &M, &N, &K, &alpha, a, &lda, b, &ldb, &beta, c, &ldc);
+    //sgemm_profile(&transa, &transb, &M, &N, &K, &alpha, a, &lda, b, &ldb, &beta, c, &ldc);
     //sgemm_profile_pack(&transa, &transb, &M, &N, &K, &alpha, a, &lda, b, &ldb, &beta, c, &ldc);
     //sgemm_profile_batch(4, &transa, &transb, &M, &N, &K, &alpha, &lda, &ldb, &beta, &ldc);
     //sgemm_profile_2pthread(&transa, &transb, &M, &N, &K, &alpha, a, &lda, b, &ldb, &beta, c, &ldc);
     //sgemm_profile_2ompthread(&transa, &transb, &M, &N, &K, &alpha, a, &lda, b, &ldb, &beta, c, &ldc);
-    sgemm_profile_2ompthread_ideal(&transa, &transb, &M, &N, &K, &alpha, a, &lda, b, &ldb, &beta, c, &ldc);
+    //sgemm_profile_2ompthread_ideal(&transa, &transb, &M, &N, &K, &alpha, a, &lda, b, &ldb, &beta, c, &ldc);
     sgemm_profile_mysgemm(&transa, &transb, &M, &N, &K, &alpha, a, &lda, b, &ldb, &beta, c, &ldc);
     mkl_free(a);
     mkl_free(b);
