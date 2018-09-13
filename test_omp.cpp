@@ -10,7 +10,7 @@
 #include <cstdint>
 #include <cstring>
 
-#define WARM_UP     10
+#define WARM_UP     1
 #define SGEMM_COUNT 10000   // every sgemm iteration numbers
 #define USE_VAR     1
 
@@ -352,7 +352,8 @@ void sgemm_profile_2ompthread(char* pTransA, char* pTransB, const int* pM, const
     //create memory for the 2nd sgemm
     float * a = matrix_init(*pM,*pK);
     float * b = matrix_init(*pK,*pN);
-    float * c = matrix_init(*pM,*pN);
+    //float * c = matrix_init(*pM,*pN);
+    float * c = (float *)mkl_malloc(M*N*sizeof(float), 64);
 
     double gflops = 2 * (M*N*K*2 + 2*M*N ) * (1e-6);
     CBLAS_TRANSPOSE transa = CblasNoTrans;
@@ -363,26 +364,30 @@ void sgemm_profile_2ompthread(char* pTransA, char* pTransB, const int* pM, const
     }
     double t0 = 0;
 
-    for(i=0; i < SGEMM_COUNT + WARM_UP; i++)
+    for(i=0; i < 100 + WARM_UP; i++)
     {
         if (i == WARM_UP){
             t0 = get_time();
         }
+
         omp_set_nested(1);
-        #pragma omp parallel for num_threads(2) proc_bind(spread)
+        #pragma omp parallel for num_threads(2)  //proc_bind(spread)
         for(d = 0; d < 2; ++d)
-        //#pragma omp parallel num_threads(20) proc_bind(close)
+        #pragma omp parallel num_threads(20)  //proc_bind(close)
         {
             //printf("d = %d, tid = %d \n", d, omp_get_thread_num());
+            for(int j = 0; j < SGEMM_COUNT/100; j++) {
             if (0 == d){
-                #pragma omp parallel num_threads(20) proc_bind(close)
+                //#pragma omp parallel num_threads(20) //proc_bind(close)
                 my_sgemm(transa, transb, *pM, *pN, *pK, *pAlpha, pa, *plda, pb, *pldb, *pBeta, pc, *pldc);
             } else {
-                #pragma omp parallel num_threads(20) proc_bind(close)
+                //#pragma omp parallel num_threads(20) //proc_bind(close)
                 my_sgemm(transa, transb, *pM, *pN, *pK, *pAlpha, a, *plda, b, *pldb, *pBeta, c, *pldc);
+            }
             }
         }
         omp_set_nested(0);
+        
     }
     double t1 = get_time() - t0;
     double avg_time = t1/SGEMM_COUNT;
@@ -493,7 +498,7 @@ float* matrix_init(int A, int B)
 {
     float * p = (float*)mkl_malloc(A*B*sizeof(float), 64);
     int a,b;
-    #pragma omp parallel for collapse(2)
+    //#pragma omp parallel for collapse(2)
     for(a=0; a < A; a++)
         for(b=0; b < B;b++)
             p[a*B+b] = (rand() % 1000 - 500)/100;
@@ -506,15 +511,17 @@ void sgemm_main(int index, char transa, char transb, int M, int N, int K, int ld
 {
     float * a = matrix_init(M,K);
     float * b = matrix_init(K,N);
-    float * c = matrix_init(M,N);
+    //float * c = matrix_init(M,N);
+    float * c = (float *)mkl_malloc(M*N*sizeof(float), 64);
     printf("----------GEMM %d----------\n", index);
     //sgemm_profile(&transa, &transb, &M, &N, &K, &alpha, a, &lda, b, &ldb, &beta, c, &ldc);
     //sgemm_profile_pack(&transa, &transb, &M, &N, &K, &alpha, a, &lda, b, &ldb, &beta, c, &ldc);
     //sgemm_profile_batch(4, &transa, &transb, &M, &N, &K, &alpha, &lda, &ldb, &beta, &ldc);
     //sgemm_profile_2pthread(&transa, &transb, &M, &N, &K, &alpha, a, &lda, b, &ldb, &beta, c, &ldc);
-    //sgemm_profile_2ompthread(&transa, &transb, &M, &N, &K, &alpha, a, &lda, b, &ldb, &beta, c, &ldc);
+
     //sgemm_profile_2ompthread_ideal(&transa, &transb, &M, &N, &K, &alpha, a, &lda, b, &ldb, &beta, c, &ldc);
     sgemm_profile_mysgemm(&transa, &transb, &M, &N, &K, &alpha, a, &lda, b, &ldb, &beta, c, &ldc);
+    //sgemm_profile_2ompthread(&transa, &transb, &M, &N, &K, &alpha, a, &lda, b, &ldb, &beta, c, &ldc);
     mkl_free(a);
     mkl_free(b);
     mkl_free(c);
