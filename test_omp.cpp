@@ -13,7 +13,7 @@
 #define WARM_UP     1
 #define SGEMM_COUNT 10000   // every sgemm iteration numbers
 #define USE_VAR     1
-
+#define D           2
 
 extern int my_sgemm(char transa, char transb,
   const int M, const int N, const int K,
@@ -528,12 +528,13 @@ void sgemm_main(int index, char transa, char transb, int M, int N, int K, int ld
 }
 
 
+
 void var_main(){
 
     int M = 40;
     int N = 102400*16;
 
-    float * a1 = matrix_init(M,N);
+    float * a1 = matrix_init(M,N*D);
     float * b1 = matrix_init(M,N);
     float * c1 = (float *)mkl_malloc(M*N*sizeof(float), 64);
 
@@ -574,7 +575,7 @@ int main()
 
 #else
     // small sgemm
-    transa='n'; transb='n'; m=20; n=2400; k=800; lda=k; alpha=1.0000; ldb=n; beta=0.0000; ldc=n;
+    transa='n'; transb='n'; m=20; n=2400; k=800; lda=D*k; alpha=1.0000; ldb=n; beta=0.0000; ldc=n;
     sgemm_main(1, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
     //transa='n'; transb='n'; m=2000; n=2400; k=800; lda=k; alpha=1.0000; ldb=n; beta=0.0000; ldc=n;
     //sgemm_main(2, transa, transb, m, n, k, lda, alpha, ldb, beta, ldc);
